@@ -315,5 +315,19 @@ http-client.private.env.json
 
 # PROJECT SPECIFIC EXCLUSIONS ↓
 
+# Données brutes (fichiers volumineux)
+data/raw/*.csv
+
+# Modèles sérialisés (générés par scripts/train.py)
+models/*.joblib
+models/*.pkl
+models/*.pickle
+
+# Données traitées (générées par scripts/train.py)
+data/processed/*.csv
+
+# Résultats (générés par scripts/main.py)
+results/*.csv
+
 # Exclude logs directory
 logs/*
