@@ -53,7 +53,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
 
-ROOT = Path().resolve().parent
+ROOT = Path().resolve()
 sys.path.insert(0, str(ROOT / "src"))
 
 PLOTS_DIR = ROOT / "plots"
@@ -206,7 +206,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
 
-ROOT = Path().resolve().parent
+ROOT = Path().resolve()
 sys.path.insert(0, str(ROOT / "src"))
 PLOTS_DIR = ROOT / "plots"
 
@@ -365,7 +365,7 @@ from sklearn.metrics import (
     classification_report,
 )
 
-ROOT = Path().resolve().parent
+ROOT = Path().resolve()
 sys.path.insert(0, str(ROOT / "src"))
 PLOTS_DIR  = ROOT / "plots"
 MODELS_DIR = ROOT / "models"
