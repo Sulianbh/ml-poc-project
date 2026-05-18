@@ -8,6 +8,27 @@ from __future__ import annotations
 
 from typing import Any
 
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+from config import DATA_DIR
+
+PROCESSED_CSV = DATA_DIR / "processed" / "allego_labeled.csv"
+
+FEATURE_COLS = [
+    "puissance_nominale",
+    "prise_type_ef",
+    "prise_type_2",
+    "prise_type_combo_ccs",
+    "prise_type_chademo",
+    "prise_type_autre",
+    "implantation_encoded",
+    "acces_libre",
+    "nbre_pdc",
+    "latitude",
+    "longitude",
+]
+
 
 def load_dataset_split() -> tuple[Any, Any, Any, Any]:
     """Return the dataset split used for model evaluation.
@@ -25,6 +46,7 @@ def load_dataset_split() -> tuple[Any, Any, Any, Any]:
     ``pandas.Series`` or ``numpy.ndarray``.
     """
 
-    raise NotImplementedError(
-        "Implement data.load_dataset_split() before running scripts/main.py."
-    )
+    df = pd.read_csv(PROCESSED_CSV)
+    X = df[FEATURE_COLS]
+    y = df["label"]
+    return tuple(train_test_split(X, y, test_size=0.2, random_state=42, stratify=y))
