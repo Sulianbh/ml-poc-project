@@ -69,6 +69,25 @@ Accuracy | F1 weighted | F1 macro | Précision macro | Rappel macro
 | K-Nearest Neighbors | Distance euclidienne, k=7 | StandardScaler |
 | XGBoost | Gradient boosting, 200 estimateurs, depth=6 | Non requise |
 
+## Résultats
+
+| Modèle | Accuracy | F1 weighted | F1 macro |
+|---|---|---|---|
+| Logistic Regression | 0.602 | 0.591 | 0.512 |
+| K-Nearest Neighbors | 0.737 | 0.737 | 0.664 |
+| **XGBoost** | **0.996** | **0.996** | **0.992** |
+
+### Note sur la performance de XGBoost
+
+XGBoost atteint 99.6% d'accuracy, ce qui peut sembler surprenant.
+C'est un **artifact connu du design** de ce PoC :
+
+- Les labels ont été créés par K-Means **par commune** sur la densité de PDC (variable géographique).
+- Le jeu de features inclut **latitude et longitude**, qui encodent directement l'appartenance géographique d'un PDC à sa commune.
+- XGBoost apprend ainsi à reconstruire presque parfaitement la partition K-Means à partir des coordonnées GPS — tâche trivialement facile pour un gradient boosting.
+
+Ce résultat démontre la cohérence du pipeline (les labels sont stables et reproductibles) mais **ne doit pas être interprété comme une vraie capacité de généralisation** sur de nouvelles données sans GPS. Pour une version production, il faudrait soit supprimer lat/lon des features, soit labelliser les communes de façon indépendante des coordonnées.
+
 ## Installation
 
 ```bash

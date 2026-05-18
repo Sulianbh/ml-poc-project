@@ -113,6 +113,11 @@ def load_data() -> pd.DataFrame | None:
     return None
 
 
+@st.cache_resource
+def _load_model_cached(path):
+    return joblib.load(path)
+
+
 def chart(fig: go.Figure, height: int = 370) -> go.Figure:
     fig.update_layout(
         paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
@@ -177,21 +182,26 @@ def pipeline_html() -> str:
     )
 
 
-def label_cards_html() -> str:
-    cards = [
-        ("#EF4444", "Classe 0", "Sous-équipé",          "73 communes · moy. 6,8 PDC"),
-        ("#F59E0B", "Classe 1", "Normalement équipé",    "154 communes · moy. 17,2 PDC"),
-        ("#22C55E", "Classe 2", "Bien équipé",           "67 communes · moy. 38,0 PDC"),
-    ]
-    items = "".join(
-        f'<div class="stCard" style="border-left:4px solid {c};padding:16px 20px;margin-bottom:0">'
-        f'<p style="margin:0;font-size:0.7rem;font-weight:600;color:#94A3B8;'
-        f'text-transform:uppercase;letter-spacing:0.06em">{badge}</p>'
-        f'<p style="margin:6px 0 2px;font-size:1rem;font-weight:700;color:#1E293B">{name}</p>'
-        f'<p style="margin:0;font-size:0.8rem;color:#64748B">{stats}</p>'
-        f'</div>'
-        for c, badge, name, stats in cards
+def label_cards_html(df: pd.DataFrame) -> str:
+    commune_stats = (
+        df.groupby("consolidated_commune")
+        .agg(nb_pdc=("label", "count"), label=("label", "first"))
     )
+    colors = {0: "#EF4444", 1: "#F59E0B", 2: "#22C55E"}
+    items = ""
+    for k, name in LABEL_NAMES.items():
+        subset = commune_stats[commune_stats["label"] == k]
+        nb_communes = len(subset)
+        mean_pdc    = subset["nb_pdc"].mean()
+        items += (
+            f'<div class="stCard" style="border-left:4px solid {colors[k]};padding:16px 20px;margin-bottom:0">'
+            f'<p style="margin:0;font-size:0.7rem;font-weight:600;color:#94A3B8;'
+            f'text-transform:uppercase;letter-spacing:0.06em">Classe {k}</p>'
+            f'<p style="margin:6px 0 2px;font-size:1rem;font-weight:700;color:#1E293B">{name}</p>'
+            f'<p style="margin:0;font-size:0.8rem;color:#64748B">'
+            f'{nb_communes} communes · moy. {mean_pdc:.1f} PDC</p>'
+            f'</div>'
+        )
     return f'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:4px">{items}</div>'
 
 
@@ -238,7 +248,7 @@ def page_dashboard(df: pd.DataFrame | None) -> None:
         'Labels créés par K-Means</p>',
         unsafe_allow_html=True,
     )
-    st.markdown(label_cards_html(), unsafe_allow_html=True)
+    st.markdown(label_cards_html(df), unsafe_allow_html=True)
 
 
 # ─── Page : Analyse ───────────────────────────────────────────
@@ -275,7 +285,7 @@ def page_analyse(df: pd.DataFrame | None) -> None:
         fig = px.histogram(
             df_h, x="puissance_nominale", color="Niveau",
             color_discrete_map={v: LABEL_COLORS[k] for k, v in LABEL_NAMES.items()},
-            nbins=40, barmode="group",
+            nbins=20, barmode="group",
             title="Distribution de la puissance nominale (kW)",
             labels={"puissance_nominale": "Puissance (kW)", "count": "Nb PDC"},
         )
@@ -428,7 +438,7 @@ def page_prediction() -> None:
         st.warning("Modèle non trouvé. Lance d'abord `python scripts/train.py`.")
         return
 
-    model = joblib.load(model_path)
+    model = _load_model_cached(model_path)
 
     col1, col2 = st.columns(2)
 
