@@ -13,6 +13,8 @@ TESTS_DIR = PROJECT_ROOT / "tests"
 
 for dir in [
     DATA_DIR,
+    DATA_DIR / "raw",
+    DATA_DIR / "processed",
     LOGS_DIR,
     MODELS_DIR,
     NOTEBOOKS_DIR,
@@ -30,12 +32,25 @@ MODEL_METRICS_FILE = RESULTS_DIR / "model_metrics.csv"
 STREAMLIT_HOST = "localhost"
 STREAMLIT_PORT = 8501
 
-# Students must replace this example with their trained models.
-# Each entry must point to a serialized model saved as `.joblib`, `.pkl`, or `.pickle`.
+# ─── Modèles entraînés ────────────────────────────────────────
+# Dataset : bornes Allego (IRVE), 7 469 points de charge
+# Cible   : niveau d'équipement de la commune (0 / 1 / 2)
+# Labels  : 0 = Sous-équipé | 1 = Normalement équipé | 2 = Bien équipé
+
 MODELS = {
-    "model_a": {
-        "name": "Model A",
-        "description": "A simple baseline model.",
-        "path": MODELS_DIR / "model_a.pkl",
+    "logistic_regression": {
+        "name": "Logistic Regression",
+        "description": "Baseline linéaire multi-classe avec standardisation.",
+        "path": MODELS_DIR / "logistic_regression.joblib",
+    },
+    "knn": {
+        "name": "K-Nearest Neighbors",
+        "description": "Classificateur par distance avec standardisation (k=7).",
+        "path": MODELS_DIR / "knn.joblib",
+    },
+    "xgboost": {
+        "name": "XGBoost",
+        "description": "Gradient boosting optimisé, 200 arbres, profondeur 6.",
+        "path": MODELS_DIR / "xgboost.joblib",
     },
 }
