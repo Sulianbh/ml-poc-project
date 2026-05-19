@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IRVE Allego — Classification ML | Albert School 2026</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:      #003189;
+      --blue-light:#e8eef8;
+      --red:       #C8102E;
+      --green:     #1a7a3c;
+      --white:     #ffffff;
+      --off-white: #f5f7fb;
+      --text:      #0d1f3c;
+      --muted:     #5a6e8c;
+      --border:    rgba(0,49,137,.13);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--off-white);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── PROGRESS ─────────────────────────────── */
+    #progress {
+      position: fixed; top: 0; left: 0; height: 5px;
+      background: linear-gradient(90deg, var(--blue), var(--red));
+      transition: width .4s ease; z-index: 100;
+    }
+
+    /* ── TOP BAR ──────────────────────────────── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 50px; background: var(--blue);
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem; z-index: 99;
+    }
+    #topbar-left  { display: flex; align-items: center; gap: .9rem; }
+    #topbar-title {
+      color: rgba(255,255,255,.85); font-size: .76rem;
+      letter-spacing: .1em; text-transform: uppercase; font-weight: 500;
+    }
+    #topbar-right { display: flex; align-items: center; gap: 1rem; }
+    #topbar-label { color: rgba(255,255,255,.5); font-size: .74rem; letter-spacing: .06em; }
+
+    #btn-fs {
+      background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25);
+      color: rgba(255,255,255,.8); width: 32px; height: 32px;
+      border-radius: 6px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    #btn-fs:hover { background: rgba(255,255,255,.22); }
+
+    /* ── DOTS NAV ─────────────────────────────── */
+    #dots {
+      position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+      display: flex; gap: .55rem; align-items: center; z-index: 100;
+    }
+    #dots .d {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(0,49,137,.2);
+      cursor: pointer; transition: background .25s, transform .25s;
+    }
+    #dots .d.active         { background: var(--blue); transform: scale(1.35); }
+    #dots.on-dark .d        { background: rgba(255,255,255,.35); }
+    #dots.on-dark .d.active { background: #ffffff; transform: scale(1.35); }
+
+    /* ── ARROW BUTTONS ────────────────────────── */
+    #nav {
+      position: fixed; bottom: 1.6rem; right: 2rem;
+      display: flex; align-items: center; gap: .7rem; z-index: 100;
+    }
+    .nav-btn {
+      background: var(--white); border: 1.5px solid var(--border);
+      color: var(--blue); width: 38px; height: 38px; border-radius: 50%;
+      font-size: .95rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,49,137,.1);
+      transition: background .2s, border-color .2s, color .2s;
+    }
+    .nav-btn:hover { background: var(--blue); color: var(--white); border-color: var(--blue); }
+
+    /* ── KEYBOARD HINT ────────────────────────── */
+    #hint {
+      position: fixed; bottom: 2.1rem; left: 2rem;
+      background: var(--off-white); border: 1px solid var(--border);
+      border-radius: 2em; padding: .3em 1em;
+      font-size: .72rem; color: var(--muted);
+      z-index: 100; opacity: 1; transition: opacity 1.2s ease;
+      pointer-events: none;
+    }
+
+    /* ── SLIDES ───────────────────────────────── */
+    .deck { width: 100%; height: 100%; position: relative; }
+
+    .slide {
+      position: absolute;
+      top: 50px; left: 0; right: 0; bottom: 0;
+      display: flex; flex-direction: column;
+      justify-content: center;
+      padding: 2.2rem 5vw 3rem;
+      opacity: 0; pointer-events: none;
+      transform: translateX(55px);
+      transition: opacity .4s ease, transform .4s ease;
+      background: var(--white);
+    }
+    .slide.active    { opacity: 1; transform: translateX(0); pointer-events: auto; }
+    .slide.out       { opacity: 0; transform: translateX(-55px); }
+    .slide.from-left { opacity: 0; transform: translateX(-55px); transition: none; }
+
+    .slide::before {
+      content: ''; position: absolute;
+      left: 0; top: 0; bottom: 0; width: 5px;
+      background: linear-gradient(180deg, var(--blue) 60%, var(--red) 100%);
+    }
+
+    /* ── SECTION LABEL ────────────────────────── */
+    .section-label {
+      font-size: clamp(1.5rem, 3vw, 2.5rem);
+      font-weight: 900; letter-spacing: .18em;
+      text-transform: uppercase; color: var(--red);
+      display: flex; align-items: center; gap: .7rem;
+      margin-bottom: 1rem;
+    }
+    .section-label::before {
+      content: ''; display: block;
+      width: 28px; height: 3px;
+      background: var(--blue); flex-shrink: 0;
+    }
+
+    /* ── TYPOGRAPHY ───────────────────────────── */
+    h2 {
+      font-size: clamp(1.5rem, 3vw, 2.6rem);
+      font-weight: 800; line-height: 1.15; color: var(--blue);
+    }
+    .accent { color: var(--red); }
+
+    /* ════════════════════════════════════════════
+       SLIDE 1 — LE PROBLÈME
+    ════════════════════════════════════════════ */
+    .prob-scenario {
+      display: flex; align-items: baseline; gap: 1.2rem;
+      background: linear-gradient(135deg, #0d1f3c 0%, #003189 100%);
+      border-radius: 12px; padding: 1.3rem 2rem; margin: .8rem 0 1.1rem;
+    }
+    .prob-stat {
+      font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 900;
+      color: var(--red); letter-spacing: -.02em; flex-shrink: 0; line-height: 1;
+    }
+    .prob-sep  { font-size: 1.5rem; color: rgba(255,255,255,.25); flex-shrink: 0; }
+    .prob-question {
+      font-size: clamp(.92rem, 1.7vw, 1.15rem); font-weight: 700;
+      color: var(--white); line-height: 1.45;
+    }
+
+    .prob-gap {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      width: 100%; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    }
+    .gap-col { padding: 1.2rem 1.8rem; display: flex; flex-direction: column; gap: .48rem; }
+    .gap-col--have { background: #fff6f7; border-right: 1px solid var(--border); }
+    .gap-col--need { background: var(--off-white); }
+    .gap-header {
+      font-size: .69rem; font-weight: 800; letter-spacing: .15em;
+      text-transform: uppercase; margin-bottom: .3rem;
+    }
+    .gap-col--have .gap-header { color: var(--red); }
+    .gap-col--need .gap-header { color: var(--blue); }
+    .gap-item {
+      display: flex; align-items: flex-start; gap: .55rem;
+      font-size: .87rem; line-height: 1.45;
+    }
+    .gap-item::before {
+      content: '·'; flex-shrink: 0;
+      font-size: 1.2rem; line-height: 1; color: rgba(0,49,137,.2);
+    }
+    .gap-col--have .gap-item {
+      font-family: 'Consolas','Monaco',monospace;
+      font-size: .8rem; color: #8b9ab0;
+    }
+    .gap-col--need .gap-item { color: var(--text); }
+    .gap-col--need .gap-item strong { color: var(--red); }
+    .gap-divider {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 .9rem; color: var(--red); font-size: 1.7rem; font-weight: 900;
+      background: var(--white);
+    }
+
+    .prob-footer {
+      margin-top: 1rem; padding: .9rem 1.6rem;
+      border: 1px solid var(--border); border-left: 4px solid var(--red);
+      border-radius: 0 10px 10px 0; background: var(--off-white);
+      font-size: clamp(.86rem, 1.5vw, .98rem); color: var(--muted); line-height: 1.55;
+    }
+    .prob-footer strong { color: var(--text); }
+    .prob-footer .accent { font-weight: 700; }
+
+    /* ════════════════════════════════════════════
+       SLIDE 2 — LA SOLUTION
+    ════════════════════════════════════════════ */
+    .three-words {
+      display: flex; gap: .8rem; flex-wrap: wrap; margin-bottom: 1.2rem;
+    }
+    .word-pill {
+      background: var(--blue); color: var(--white);
+      border-radius: 4px; padding: .45em 1.2em;
+      font-size: clamp(.95rem, 1.8vw, 1.2rem);
+      font-weight: 800; letter-spacing: .06em;
+    }
+    .word-pill.red   { background: var(--red); }
+    .word-pill.green { background: var(--green); }
+
+    .solution-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 3rem; width: 100%; align-items: start;
+    }
+    .solution-bullets { display: flex; flex-direction: column; gap: .75rem; }
+    .sol-item {
+      display: flex; gap: 1rem;
+      background: var(--off-white); border: 1px solid var(--border);
+      border-left: 4px solid var(--blue);
+      border-radius: 0 10px 10px 0; padding: .9rem 1.2rem;
+      align-items: flex-start;
+    }
+    .sol-item .num {
+      font-size: .75rem; font-weight: 800;
+      color: var(--white); background: var(--blue);
+      border-radius: 50%; width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: .1rem;
+    }
+    .sol-item p { font-size: .88rem; line-height: 1.55; color: var(--text); }
+    .sol-item p strong { color: var(--blue); }
+
+    .solution-highlight {
+      background: var(--off-white); border: 2px solid var(--red);
+      border-radius: 12px; padding: 1.8rem;
+    }
+    .solution-highlight h3 {
+      font-size: .7rem; font-weight: 800; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--red); margin-bottom: 1rem;
+    }
+    .solution-highlight .big-num {
+      font-size: clamp(3rem, 6vw, 5rem);
+      font-weight: 900; color: var(--blue); line-height: 1;
+    }
+    .solution-highlight .big-label {
+      font-size: .95rem; color: var(--muted); margin-bottom: 1.4rem;
+    }
+    .hl-item {
+      display: flex; align-items: center; gap: .8rem;
+      font-size: .88rem; color: var(--text); margin-bottom: .55rem;
+    }
+    .hl-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--red); flex-shrink: 0;
+    }
+    .hl-dot.g { background: var(--green); }
+
+    /* ════════════════════════════════════════════
+       SLIDE 3 — DEMO
+    ════════════════════════════════════════════ */
+    .slide-demo {
+      background: var(--blue) !important;
+      align-items: center; justify-content: center;
+    }
+    .slide-demo::before { display: none; }
+
+    .demo-title {
+      font-size: clamp(3.5rem, 10vw, 8rem);
+      font-weight: 900; color: var(--white);
+      letter-spacing: -.03em; line-height: 1; text-align: center;
+    }
+    .demo-title span { color: var(--red); }
+
+    .live-badge {
+      display: flex; align-items: center; gap: .6rem; margin-top: 1.4rem;
+      font-size: .9rem; letter-spacing: .2em; text-transform: uppercase;
+      color: rgba(255,255,255,.65);
+    }
+    .pulse-dot {
+      width: 11px; height: 11px; border-radius: 50%; background: var(--red);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: .3; transform: scale(.7); }
+    }
+
+    .demo-steps {
+      display: flex; gap: 1.2rem; margin-top: 2.8rem;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .demo-step {
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      border-radius: 8px; padding: .7rem 1.4rem;
+      font-size: .92rem; color: rgba(255,255,255,.85);
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .demo-step .arr { color: var(--red); font-weight: 700; }
+
+    /* ════════════════════════════════════════════
+       SLIDE 4 — VALEUR BUSINESS
+    ════════════════════════════════════════════ */
+    .value-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 1.4rem; width: 100%; margin-top: 1.3rem;
+    }
+    .value-card {
+      background: var(--off-white); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.5rem 1.6rem;
+      display: flex; flex-direction: column; gap: .75rem;
+    }
+    .value-card--ops   { border-top: 4px solid var(--blue); }
+    .value-card--strat { border-top: 4px solid var(--red); }
+    .value-card--data  { border-top: 4px solid var(--green); }
+
+    .value-num {
+      font-size: .68rem; font-weight: 800; letter-spacing: .16em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .value-card h3 {
+      font-size: clamp(.9rem, 1.6vw, 1.1rem);
+      font-weight: 800; color: var(--blue); line-height: 1.25;
+    }
+    .value-card--strat h3 { color: var(--red); }
+    .value-card--data h3  { color: var(--green); }
+
+    .value-card p { font-size: .84rem; line-height: 1.65; color: var(--muted); }
+    .value-card p strong { color: var(--text); }
+
+    .value-metric {
+      font-family: 'Consolas','Monaco',monospace; font-size: .74rem;
+      color: var(--muted); background: rgba(0,49,137,.05);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: .65rem .9rem; margin-top: .2rem; line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<div id="topbar">
+  <div id="topbar-left">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </svg>
+    <span id="topbar-title">IRVE Allego · Classification ML des Communes</span>
+  </div>
+  <div id="topbar-right">
+    <span id="topbar-label">Albert School · Projet ML 2026</span>
+    <button id="btn-fs" title="Plein écran (F)">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="1,5 1,1 5,1"/><polyline points="9,1 13,1 13,5"/>
+        <polyline points="13,9 13,13 9,13"/><polyline points="5,13 1,13 1,9"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 1 — LE PROBLÈME
+  ══════════════════════════════════════════ -->
+  <div class="slide active" id="s1">
+    <div class="section-label">Le Problème</div>
+
+    <div class="prob-scenario">
+      <span class="prob-stat">294</span>
+      <span class="prob-sep">&nbsp;—&nbsp;</span>
+      <span class="prob-question">
+        communes françaises couvertes par Allego. Parmi elles, lesquelles sont vraiment sous-équipées ?<br>
+        <em>Personne ne le sait. Les décisions de déploiement se prennent à l'intuition.</em>
+      </span>
+    </div>
+
+    <div class="prob-gap">
+      <div class="gap-col gap-col--have">
+        <div class="gap-header">Ce que les opérateurs ont</div>
+        <div class="gap-item">224 476 PDC dans le registre IRVE national</div>
+        <div class="gap-item">7 469 bornes Allego · données brutes</div>
+        <div class="gap-item">lat/lon · puissance · type de prise · opérateur</div>
+        <div class="gap-item">Fichiers CSV non structurés · mise à jour mensuelle</div>
+        <div class="gap-item">Aucune classification territoriale disponible</div>
+      </div>
+      <div class="gap-divider">→</div>
+      <div class="gap-col gap-col--need">
+        <div class="gap-header">Ce dont Allego a besoin</div>
+        <div class="gap-item"><strong>Quelles communes prioriser pour le prochain déploiement ?</strong></div>
+        <div class="gap-item">Une classification objective : Sous-équipé / Normal / Bien équipé</div>
+        <div class="gap-item">Un score de confiance par commune, reproductible</div>
+        <div class="gap-item">Un outil actualisable à chaque mise à jour IRVE</div>
+        <div class="gap-item">Des décisions data-driven en secondes, pas en semaines</div>
+      </div>
+    </div>
+
+    <div class="prob-footer">
+      Sans classification automatisée, identifier les <strong><span class="accent">73 communes sous-équipées</span></strong> parmi 294
+      requiert des semaines d'analyse manuelle — <strong>pendant lesquelles la concurrence avance.</strong>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 2 — LA SOLUTION
+  ══════════════════════════════════════════ -->
+  <div class="slide" id="s2">
+    <div class="section-label">Notre Solution</div>
+    <div class="three-words">
+      <span class="word-pill">Filtrer</span>
+      <span class="word-pill">Classifier</span>
+      <span class="word-pill red">Prédire</span>
+    </div>
+
+    <div class="solution-grid">
+      <div class="solution-bullets">
+        <div class="sol-item">
+          <span class="num">1</span>
+          <p>On filtre les <strong>224 476 PDC du registre IRVE</strong> national pour isoler les 7 469 bornes Allego sur 294 communes — puis nettoyage → 5 687 points exploitables</p>
+        </div>
+        <div class="sol-item">
+          <span class="num">2</span>
+          <p>On ingénierie <strong>9 features techniques</strong> par commune : puissance nominale, 5 types de prises (EF, T2, CCS, CHAdeMO, autre), implantation, accès libre, nombre de PDC</p>
+        </div>
+        <div class="sol-item">
+          <span class="num">3</span>
+          <p><strong>K-Means (k=3)</strong> labellise automatiquement chaque commune — 73 sous-équipées · 154 normales · 67 bien équipées — sans aucune annotation manuelle</p>
+        </div>
+        <div class="sol-item">
+          <span class="num">4</span>
+          <p>Trois classifieurs comparés : Régression Logistique, KNN, <strong>XGBoost</strong>. Le seuil de décision calibré à <strong>0,63</strong> maximise la précision sur les zones critiques</p>
+        </div>
+      </div>
+
+      <div class="solution-highlight">
+        <h3>XGBoost + Seuil calibré 0,63</h3>
+        <div class="big-num">65 %</div>
+        <div class="big-label">de précision sur le jeu de test — meilleur modèle</div>
+        <div class="hl-item"><span class="hl-dot"></span> Logistic Regression &nbsp;→&nbsp; 53,6 % accuracy</div>
+        <div class="hl-item"><span class="hl-dot"></span> K-Nearest Neighbors &nbsp;→&nbsp; 62,0 % accuracy</div>
+        <div class="hl-item"><span class="hl-dot g"></span> <strong>XGBoost + seuil 0,63 &nbsp;→&nbsp; 65,0 % accuracy</strong></div>
+        <div class="hl-item"><span class="hl-dot g"></span> F1 Weighted : 64,6 % — meilleur équilibre précision / rappel</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 3 — DEMO
+  ══════════════════════════════════════════ -->
+  <div class="slide slide-demo" id="s3">
+    <div class="demo-title">Démo<span>.</span></div>
+    <div class="live-badge">
+      <span class="pulse-dot"></span>
+      En direct
+    </div>
+    <div class="demo-steps">
+      <div class="demo-step">Lancement Streamlit</div>
+      <div class="demo-step"><span class="arr">&#x2192;</span> Dashboard carte interactive</div>
+      <div class="demo-step"><span class="arr">&#x2192;</span> Comparaison des 3 modèles</div>
+      <div class="demo-step"><span class="arr">&#x2192;</span> Prédiction en temps réel</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SLIDE 4 — VALEUR BUSINESS
+  ══════════════════════════════════════════ -->
+  <div class="slide" id="s4">
+    <div class="section-label">Valeur Business</div>
+    <h2>Ce que le système permet à <span class="accent">Allego</span></h2>
+
+    <div class="value-grid">
+      <div class="value-card value-card--ops">
+        <div class="value-num">Axe 01</div>
+        <h3>Efficacité Opérationnelle</h3>
+        <p>
+          L'analyse manuelle de 294 communes prend des semaines. Le modèle la réalise en quelques secondes,
+          avec une précision <strong>reproductible et documentée</strong>.
+          Les équipes terrain se concentrent sur l'exécution, pas sur l'analyse.
+        </p>
+        <div class="value-metric">
+          294 communes → classification complète en &lt; 5 secondes
+        </div>
+      </div>
+
+      <div class="value-card value-card--strat">
+        <div class="value-num">Axe 02</div>
+        <h3>Expansion Stratégique</h3>
+        <p>
+          <strong>73 communes sous-équipées identifiées</strong> = 73 opportunités de déploiement prioritaires.
+          Chaque borne installée au bon endroit maximise l'usage et le retour sur investissement
+          dans un marché en forte croissance.
+        </p>
+        <div class="value-metric">
+          73 zones critiques · 8,7 % du réseau · priorisation immédiate
+        </div>
+      </div>
+
+      <div class="value-card value-card--data">
+        <div class="value-num">Axe 03</div>
+        <h3>Décisions Data-Driven</h3>
+        <p>
+          Le pipeline est réplicable sur <strong>n'importe quel opérateur</strong> du registre IRVE.
+          À chaque mise à jour nationale, le modèle est ré-entraîné et la carte des priorités
+          recalculée automatiquement — sans intervention humaine.
+        </p>
+        <div class="value-metric">
+          224 476 PDC IRVE · scalable à toute la France · mise à jour continue
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.deck -->
+
+<div id="dots"></div>
+
+<div id="nav">
+  <button class="nav-btn" id="btn-prev" aria-label="Slide précédente">&#x2190;</button>
+  <button class="nav-btn" id="btn-next" aria-label="Slide suivante">&#x2192;</button>
+</div>
+
+<div id="hint">&#x2190; &#x2192; naviguer &nbsp;·&nbsp; F plein écran</div>
+
+<script>
+  const slides   = Array.from(document.querySelectorAll('.slide'));
+  const progress = document.getElementById('progress');
+  const dotsEl   = document.getElementById('dots');
+  let cur = 0;
+
+  slides.forEach((_, i) => {
+    const d = document.createElement('span');
+    d.className = 'd' + (i === 0 ? ' active' : '');
+    d.addEventListener('click', () => go(i));
+    dotsEl.appendChild(d);
+  });
+
+  function updateDots() {
+    const onDark = slides[cur].classList.contains('slide-demo');
+    dotsEl.classList.toggle('on-dark', onDark);
+    dotsEl.querySelectorAll('.d').forEach((d, i) =>
+      d.classList.toggle('active', i === cur)
+    );
+  }
+
+  function go(next) {
+    if (next < 0 || next >= slides.length) return;
+    const backward = next < cur;
+    const prev = cur;
+    cur = next;
+
+    slides[prev].classList.remove('active');
+    if (!backward) slides[prev].classList.add('out');
+    setTimeout(() => slides[prev].classList.remove('out', 'from-left'), 420);
+
+    if (backward) {
+      slides[cur].classList.add('from-left');
+      void slides[cur].offsetWidth;
+      requestAnimationFrame(() => {
+        slides[cur].classList.remove('from-left');
+        slides[cur].classList.add('active');
+      });
+    } else {
+      slides[cur].classList.add('active');
+    }
+
+    progress.style.width = `${((cur + 1) / slides.length) * 100}%`;
+    updateDots();
+  }
+
+  document.getElementById('btn-next').addEventListener('click', () => go(cur + 1));
+  document.getElementById('btn-prev').addEventListener('click', () => go(cur - 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') go(cur + 1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                    go(cur - 1);
+    if (e.key === 'f' || e.key === 'F') toggleFS();
+  });
+
+  let tx = 0;
+  document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend',   e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) go(dx < 0 ? cur + 1 : cur - 1);
+  }, { passive: true });
+
+  function toggleFS() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    else document.exitFullscreen();
+  }
+  document.getElementById('btn-fs').addEventListener('click', toggleFS);
+
+  setTimeout(() => {
+    const h = document.getElementById('hint');
+    if (!h) return;
+    h.style.opacity = '0';
+    setTimeout(() => h.remove(), 1300);
+  }, 3500);
+
+  progress.style.width = `${(1 / slides.length) * 100}%`;
+</script>
+</body>
+</html>
