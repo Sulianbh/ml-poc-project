@@ -29,7 +29,7 @@ ml-poc-project/
 │
 ├── scripts/
 │   ├── train.py              # Entraînement des modèles (à lancer en premier)
-│   └── main.py              # Évaluation + lancement Streamlit
+│   └── main.py               # Évaluation + lancement Streamlit
 │
 └── src/
     ├── config.py             # Chemins, registre des modèles, config Streamlit
