@@ -47,7 +47,7 @@ model_key, model_name, model_path, accuracy, f1_weighted, f1_macro, precision_ma
 
 | Colonne           | Formule simplifiée                                    | Interprétation                                                                             |
 |-------------------|-------------------------------------------------------|--------------------------------------------------------------------------------------------|
-| `accuracy`        | prédictions correctes ÷ total prédictions             | Proportion globale de bornes bien classifiées. Exemple : 0.996 = 99.6 % de bonnes réponses |
+| `accuracy`        | prédictions correctes ÷ total prédictions             | Proportion globale de bornes bien classifiées. Exemple : 0.620 = 62.0 % de bonnes réponses |
 | `f1_weighted`     | moyenne du F1 de chaque classe, pondérée par sa taille | Équilibre précision/rappel, favorise les classes les plus fréquentes                       |
 | `f1_macro`        | moyenne du F1 de chaque classe, sans pondération       | Équilibre précision/rappel, équitable entre les 3 classes (même poids pour chacune)        |
 | `precision_macro` | vrais positifs ÷ (vrais + faux positifs), macro       | Parmi toutes les bornes classées "sous-équipées", quelle fraction l'est vraiment ?         |
@@ -57,52 +57,50 @@ model_key, model_name, model_path, accuracy, f1_weighted, f1_macro, precision_ma
 
 ### Résultats obtenus sur ce projet
 
+> Les scores sont calculés par `scripts/main.py` (predict() standard, sans seuil optimisé).
+> Pour XGBoost avec le seuil 0.63 activé, l'accuracy passe à ~65 % — voir
+> `scripts/threshold_analysis.py` et `plots/12_seuil_xgboost.png`.
+
 | Modèle                | Accuracy | F1 weighted | F1 macro | Interprétation                                               |
 |-----------------------|----------|-------------|----------|--------------------------------------------------------------|
-| Logistic Regression   | 0.602    | 0.591       | 0.512    | Baseline correct, frontières non linéaires mal capturées     |
-| K-Nearest Neighbors   | 0.737    | 0.737       | 0.664    | Nettement meilleur, capture la proximité géographique        |
-| **XGBoost**           | **0.996**| **0.996**   | **0.992**| Score quasi parfait — voir explication ci-dessous            |
+| Logistic Regression   | 0.536    | 0.556       | 0.497    | Baseline — frontières non linéaires mal capturées            |
+| K-Nearest Neighbors   | 0.620    | 0.615       | 0.584    | +8 points — capture des voisinages dans l'espace des features|
+| **XGBoost**           | **0.605**| **0.611**   | **0.564**| Meilleur modèle en F1 macro — seuil 0.63 disponible          |
 
 ---
 
-### ⚠️ Pourquoi XGBoost atteint 99.6 % d'accuracy ?
+### Note sur les performances
 
-Ce score exceptionnel est un **artifact connu du design** de ce projet, pas une vraie
-performance en production.
+Ces scores reflètent la vraie capacité de généralisation des modèles sur les
+**9 features techniques** des bornes (puissance, types de prises, implantation,
+accès, nombre de PDC).
 
-**Explication :**
-
-1. Les labels (0 / 1 / 2) ont été créés par **K-Means sur la densité de bornes par commune**.
-   La densité d'une commune dépend directement de sa position géographique.
-
-2. Les features incluent **latitude** et **longitude**, qui encodent directement
-   l'appartenance géographique d'un point de charge à sa commune.
-
-3. XGBoost apprend donc à **reconstruire la partition K-Means à partir des
-   coordonnées GPS** — une tâche triviale pour un gradient boosting.
-
-**Conséquence :** ce modèle ne généralise pas à de nouvelles données sans GPS.
-Pour une version production, il faudrait :
-- Soit supprimer `latitude` et `longitude` des features
-- Soit créer les labels de façon indépendante des coordonnées
+La classe 0 (Sous-équipé, 8.7 % du dataset) est la plus difficile à détecter.
+Deux mécanismes sont mis en place pour améliorer sa détection :
+- **Re-pondération des classes** à l'entraînement (`class_weight="balanced"` pour LR,
+  `sample_weight` pour XGBoost).
+- **Seuil de décision optimisé** pour XGBoost : en élevant le seuil sur P(Sous-équipé)
+  à 0.63 (au-dessus du niveau naturel ~0.33), la précision sur la classe 0 passe
+  de 0.33 à 0.55 (voir `scripts/threshold_analysis.py`).
 
 ---
 
 ### Comment lire les métriques ?
 
 ```
-accuracy = 0.996  →  Sur 1 000 bornes testées, 996 sont correctement classifiées.
+accuracy = 0.620  →  Sur 1 138 bornes testées, 62.0 % sont correctement classifiées.
 
-f1_weighted = 0.996  →  Excellent équilibre précision/rappel sur toutes les classes.
+f1_weighted = 0.615  →  Bon équilibre précision/rappel sur toutes les classes.
 
-f1_macro = 0.992  →  Même les classes minoritaires sont bien détectées.
+f1_macro = 0.584  →  Score équitable sur les 3 classes.
                       (Si f1_macro << f1_weighted : le modèle ignore les petites classes)
 
-precision = 0.992  →  Quand le modèle dit "cette commune est sous-équipée",
-                       il a raison 99.2 % du temps.
+precision_macro = 0.604  →  Quand le modèle dit "sous-équipée",
+                             il a raison en moyenne 60 % du temps.
 
-recall = 0.992     →  Le modèle détecte 99.2 % des communes réellement sous-équipées.
-                       (Un faible rappel = beaucoup de sous-équipements ratés)
+recall_macro = 0.580     →  Le modèle détecte en moyenne 58 % des communes
+                             de chaque classe.
+                             (Un faible rappel sur la classe 0 = sous-équipements ratés)
 ```
 
 ---

@@ -72,8 +72,8 @@ Parmi les ~50 colonnes du fichier brut, voici celles exploitées par `scripts/tr
 | `implantation_station`      | Feature → encodée en entier (0 à 4)                    |
 | `condition_acces`           | Feature → binarisée (contient "libre" → 1.0, sinon 0.0)|
 | `nbre_pdc`                  | Feature directe (nombre de points de charge)            |
-| `consolidated_latitude`     | Feature → renommée `latitude`, convertie en float      |
-| `consolidated_longitude`    | Feature → renommée `longitude`, convertie en float     |
+| `consolidated_latitude`     | Métadonnée → renommée `latitude`, convertie en float (affichage carte) |
+| `consolidated_longitude`    | Métadonnée → renommée `longitude`, convertie en float (affichage carte)|
 | `consolidated_commune`      | Métadonnée → utilisée pour le clustering K-Means       |
 
 ---
@@ -97,7 +97,7 @@ python scripts/train.py
 |-----------------------------|------------------------------|
 | Nombre de lignes            | 5 687 points de charge       |
 | Nombre de communes          | 294 communes uniques         |
-| Nombre de colonnes          | 13 (1 métadonnée + 11 features + 1 cible) |
+| Nombre de colonnes          | 13 (1 commune + 2 GPS + 9 features + 1 cible) |
 | Puissance nominale          | de 0 kW à 400 kW             |
 | Latitude                    | de 3.84° à 51.02° (France entière) |
 
@@ -110,20 +110,27 @@ python scripts/train.py
 | 2     | Bien équipé            | 2 549                      | 44.8 %     |
 
 > Le label 0 est minoritaire (8.7 %) — c'est pourquoi on utilise des métriques
-> macro (non pondérées) en plus du F1 weighted, pour ne pas ignorer cette classe.
+> macro (non pondérées) en plus du F1 weighted, et une re-pondération des classes
+> à l'entraînement (voir `scripts/train.py` et `scripts/threshold_analysis.py`).
 
 ### Description complète des 13 colonnes
 
-#### Colonne de métadonnée (non utilisée comme feature)
+#### Métadonnées (non utilisées comme features par les modèles)
 
-| Colonne                  | Type   | Exemple         | Description                                             |
-|--------------------------|--------|-----------------|---------------------------------------------------------|
-| `consolidated_commune`   | texte  | `"Cognac"`      | Nom de la commune où se trouve la borne. Utilisée dans  |
-|                          |        |                 | l'interface Streamlit pour le sélecteur de commune.     |
-|                          |        |                 | **Non fournie aux modèles** (information géographique   |
-|                          |        |                 | redondante avec latitude/longitude).                    |
+| Colonne                  | Type   | Exemple         | Description                                                      |
+|--------------------------|--------|-----------------|------------------------------------------------------------------|
+| `consolidated_commune`   | texte  | `"Cognac"`      | Nom de la commune. Utilisée pour le sélecteur de commune         |
+|                          |        |                 | dans l'interface Streamlit et le clustering K-Means.             |
+|                          |        |                 | **Non fournie aux modèles.**                                     |
+| `latitude`               | float  | 48.84           | Coordonnée GPS nord-sud. Utilisée uniquement pour la carte       |
+|                          |        |                 | interactive Streamlit. **Non fournie aux modèles** : son         |
+|                          |        |                 | inclusion créerait un artefact (les labels étant définis         |
+|                          |        |                 | géographiquement par K-Means, les coordonnées encodent           |
+|                          |        |                 | directement la cible).                                           |
+| `longitude`              | float  | 2.35            | Coordonnée GPS est-ouest. Même rôle que `latitude`.              |
+|                          |        |                 | **Non fournie aux modèles.**                                     |
 
-#### 11 colonnes de features (variables d'entrée des modèles)
+#### 9 colonnes de features (variables d'entrée des modèles)
 
 | Colonne                  | Type   | Valeurs          | Statistique réelle     | Description                                       |
 |--------------------------|--------|------------------|------------------------|---------------------------------------------------|
@@ -139,7 +146,7 @@ python scripts/train.py
 |                          |        |                  |                        | Allego.                                           |
 | `prise_type_chademo`     | float  | 0.0 ou 1.0       | 5.7 % ont ce type      | Prise CHAdeMO — standard japonais pour la         |
 |                          |        |                  |                        | recharge DC rapide. En déclin en Europe.          |
-| `prise_type_autre`       | float  | 0.0 ou 1.0       | 0.0 % ont ce type      | Autre type de connecteur (très rare dans le       |
+| `prise_type_autre`       | float  | 0.0 ou 1.0       | ~0.0 % ont ce type     | Autre type de connecteur (très rare dans le       |
 |                          |        |                  |                        | réseau Allego).                                   |
 | `implantation_encoded`   | entier | 0 à 4            | 0 ou 1 ici             | Type d'emplacement de la station, encodé :        |
 |                          |        |                  |                        | 0 = Station dédiée recharge rapide                |
@@ -151,11 +158,6 @@ python scripts/train.py
 |                          |        |                  |                        | Toutes les bornes Allego sont en accès libre.     |
 | `nbre_pdc`               | entier | 1 à 36           | moy. ~4                | Nombre total de points de charge sur la station.  |
 |                          |        |                  |                        | Une station peut avoir plusieurs bornes.          |
-| `latitude`               | float  | 3.84 à 51.02     | —                      | Coordonnée GPS nord-sud. France métropolitaine    |
-|                          |        |                  |                        | ≈ 41° à 51°. ⚠️ Feature très prédictive (voir    |
-|                          |        |                  |                        | note sur XGBoost dans `results/LISEZ-MOI.md`).   |
-| `longitude`              | float  | -5.2 à 10.0      | —                      | Coordonnée GPS est-ouest. France métropolitaine   |
-|                          |        |                  |                        | ≈ -5° (Brest) à +8° (Strasbourg).                |
 
 #### Colonne cible (variable à prédire)
 

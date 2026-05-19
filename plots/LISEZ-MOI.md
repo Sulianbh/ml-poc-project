@@ -1,6 +1,6 @@
 # Dossier `plots/` — Visualisations exportées
 
-Ce dossier contient les 11 graphiques exportés par les notebooks Jupyter.
+Ce dossier contient les 12 graphiques exportés par les notebooks Jupyter et les scripts d'analyse.
 Ils constituent la **trace visuelle** de l'analyse : chaque graphique correspond
 à une décision ou une observation documentée dans les notebooks.
 
@@ -18,9 +18,10 @@ Ils constituent la **trace visuelle** de l'analyse : chaque graphique correspond
 | `06_distribution_nb_pdc.png`         | 39 Ko  | `02_clustering.ipynb`   | Clustering & labellisation    |
 | `07_elbow_silhouette.png`            | 71 Ko  | `02_clustering.ipynb`   | Clustering & labellisation    |
 | `08_carte_clusters.png`              | 78 Ko  | `02_clustering.ipynb`   | Clustering & labellisation    |
-| `09_comparaison_modeles.png`         | 38 Ko  | `03_modelisation.ipynb` | Évaluation des modèles        |
-| `10_matrices_confusion.png`          | 65 Ko  | `03_modelisation.ipynb` | Évaluation des modèles        |
-| `11_feature_importance_xgboost.png`  | 47 Ko  | `03_modelisation.ipynb` | Évaluation des modèles        |
+| `09_comparaison_modeles.png`         | 38 Ko  | `03_modelisation.ipynb`         | Évaluation des modèles        |
+| `10_matrices_confusion.png`          | 65 Ko  | `03_modelisation.ipynb`         | Évaluation des modèles        |
+| `11_feature_importance_xgboost.png`  | 47 Ko  | `03_modelisation.ipynb`         | Évaluation des modèles        |
+| `12_seuil_xgboost.png`               | ~60 Ko | `scripts/threshold_analysis.py` | Optimisation du seuil         |
 
 > Ces fichiers sont générés automatiquement à chaque exécution des notebooks.
 > Ils ne doivent **jamais** être modifiés à la main.
@@ -154,8 +155,10 @@ niveau d'équipement :
 
 **Ce qu'on apprend :** la séparation géographique entre les classes est **très visible**
 à l'œil nu. Les communes "Bien équipé" (vert) coïncident avec les grandes métropoles
-et les nœuds autoroutiers. C'est précisément ce signal géographique que XGBoost
-capturera via les features `latitude` et `longitude`.
+et les nœuds autoroutiers. Ce signal géographique est visible dans les données,
+mais les coordonnées GPS ne sont **pas** fournies aux modèles comme features — pour
+éviter que les modèles apprennent à reconstruire la partition K-Means géographique
+plutôt qu'à exploiter les caractéristiques techniques des bornes.
 
 ---
 
@@ -173,9 +176,9 @@ Compare côte à côte les trois métriques principales pour chaque modèle :
 
 Les valeurs sont affichées directement sur chaque barre.
 
-**Ce qu'on apprend :** la progression est nette — LR (~60 %) → KNN (~74 %) → XGBoost (~99.6 %).
-L'écart entre F1 weighted et F1 macro est faible pour tous les modèles, ce qui indique
-que même la **classe minoritaire** (Sous-équipé, 8.7 %) est bien traitée.
+**Ce qu'on apprend :** la progression est nette — LR (~54 %) → KNN (~62 %) → XGBoost (~65 %).
+L'écart entre F1 weighted et F1 macro révèle la difficulté à détecter la **classe minoritaire**
+(Sous-équipé, 8.7 % du dataset) — d'où l'utilisation d'un seuil de décision optimisé pour XGBoost.
 
 ---
 
@@ -208,24 +211,44 @@ principalement des **classes adjacentes** (0↔1 et 1↔2), jamais des sauts ext
 ### `11_feature_importance_xgboost.png`
 
 **Type :** graphique en barres horizontales
-**Données :** score d'importance de chaque feature pour le modèle XGBoost
+**Données :** score d'importance des 9 features techniques pour le modèle XGBoost
 
 Affiche le **gain** de chaque feature : à quel point elle réduit l'erreur de
 classification quand XGBoost l'utilise pour faire une coupure dans un arbre.
-Les barres `latitude` et `longitude` sont colorées en **rouge** pour signaler
-visuellement l'artefact du projet.
 
-**Ce qu'on apprend :** `latitude` et `longitude` dominent massivement l'importance,
-loin devant `puissance_nominale` ou les types de prises. XGBoost a appris à
-**reconstruire la géographie des communes** plutôt qu'à utiliser les caractéristiques
-techniques des bornes. C'est la preuve visuelle de l'artefact expliqué dans
-`results/LISEZ-MOI.md` et `models/LISEZ-MOI.md`.
+**Ce qu'on apprend :** parmi les 9 features techniques, `puissance_nominale`,
+`nbre_pdc` et les types de prises (notamment `prise_type_combo_ccs`) ressortent
+généralement en tête. La prédiction se fonde entièrement sur les caractéristiques
+des bornes, sans information géographique.
+
+---
+
+## Phase 4 — Optimisation du seuil de décision (`scripts/threshold_analysis.py`)
+
+### `12_seuil_xgboost.png`
+
+**Type :** deux graphiques côte à côte
+**Données :** métriques de la classe 0 (Sous-équipé) en fonction du seuil sur P(classe=0)
+
+**Graphique de gauche — Métriques vs Seuil :**
+Montre comment précision, rappel et F1 de la classe 0 évoluent quand on fait varier
+le seuil sur P(Sous-équipé) de 0.05 à 0.95. La ligne verticale orange matérialise
+le seuil optimal (0.63) qui maximise le F1 de la classe 0.
+
+**Graphique de droite — Courbe Précision-Rappel :**
+Représentation standard du compromis précision/rappel pour la classe 0.
+Le point orange met en évidence le maximum du F1.
+
+**Ce qu'on apprend :** le seuil par défaut (argmax ~0.33) donne un rappel élevé (0.66)
+mais une précision très faible (0.33). Le seuil 0.63 améliore significativement
+la précision (0.33 → 0.55) au prix d'un rappel légèrement plus bas (0.66 → 0.50),
+ce qui améliore le F1 de la classe 0 de 0.44 → 0.52.
 
 ---
 
 ## Régénérer les graphiques
 
-Les graphiques sont produits par les notebooks — il suffit de les ré-exécuter :
+Les graphiques `01` à `11` sont produits par les notebooks — il suffit de les ré-exécuter :
 
 ```bash
 # Lancer Jupyter et exécuter les notebooks dans l'ordre
@@ -237,7 +260,13 @@ jupyter nbconvert --to notebook --execute notebooks/02_clustering.ipynb
 jupyter nbconvert --to notebook --execute notebooks/03_modelisation.ipynb
 ```
 
-> ⚠️  `03_modelisation.ipynb` nécessite que `scripts/train.py` ait été exécuté
->     au préalable (les fichiers `.joblib` doivent exister dans `models/`).
+Le graphique `12_seuil_xgboost.png` est produit par :
 
-Les fichiers PNG dans ce dossier sont **écrasés** à chaque exécution des notebooks.
+```bash
+python scripts/threshold_analysis.py
+```
+
+> ⚠️  `03_modelisation.ipynb` et `threshold_analysis.py` nécessitent que `scripts/train.py`
+>     ait été exécuté au préalable (les fichiers `.joblib` doivent exister dans `models/`).
+
+Les fichiers PNG dans ce dossier sont **écrasés** à chaque exécution.

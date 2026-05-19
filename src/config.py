@@ -122,8 +122,9 @@ REGISTRE_MODELES = {
         "name":        "Logistic Regression",
         "description": (
             "Modèle de référence (baseline) : classification linéaire multi-classe. "
-            "Les features sont standardisées avant l'entraînement "
-            "(StandardScaler : moyenne=0, écart-type=1)."
+            "Les features sont standardisées (StandardScaler : moyenne=0, écart-type=1). "
+            "Re-pondération des classes (class_weight='balanced') pour mieux détecter "
+            "la classe minoritaire Sous-équipé (8.7 % du dataset)."
         ),
         "path": REPERTOIRE_MODELES / "logistic_regression.joblib",
     },
@@ -131,17 +132,18 @@ REGISTRE_MODELES = {
         "name":        "K-Nearest Neighbors",
         "description": (
             "Classificateur par proximité : classe une station en fonction de ses "
-            "k=7 voisines les plus proches (distance euclidienne). "
-            "Nécessite une standardisation préalable des features."
+            "k=7 voisines les plus proches (distance euclidienne sur 9 features). "
+            "Nécessite une standardisation préalable. Ne supporte pas la re-pondération."
         ),
         "path": REPERTOIRE_MODELES / "knn.joblib",
     },
     "xgboost": {
         "name":        "XGBoost",
         "description": (
-            "Gradient boosting : ensemble de 200 arbres de décision entraînés "
-            "séquentiellement, chacun corrigeant les erreurs du précédent. "
-            "Profondeur maximale des arbres : 6. Aucune normalisation requise."
+            "Gradient boosting : 200 arbres entraînés séquentiellement sur 9 features. "
+            "Re-pondération via sample_weight (balanced). "
+            "Seuil de décision optimisé sur P(Sous-équipé) ≥ 0.63 pour améliorer "
+            "la précision sur la classe minoritaire (0.33 → 0.55)."
         ),
         "path": REPERTOIRE_MODELES / "xgboost.joblib",
     },
@@ -166,12 +168,17 @@ COLONNES_FEATURES = [
     "implantation_encoded",     # Type d'emplacement encodé      — entier 0 à 4
     "acces_libre",              # Accès sans restriction         — 0 = non,     1 = oui
     "nbre_pdc",                 # Nombre de points de charge sur la station
-    "latitude",                 # Coordonnée GPS nord-sud
-    "longitude",                # Coordonnée GPS est-ouest
 ]
 
 # Nom de la colonne cible (variable à prédire) dans le dataset traité
 COLONNE_CIBLE = "label"
+
+# Seuil de décision optimisé pour XGBoost sur la classe 0 (Sous-équipé).
+# Déterminé par scripts/threshold_analysis.py : maximise le F1 de la classe 0.
+# Au-dessus de ce seuil sur P(classe=0), on prédit "Sous-équipé" plutôt que
+# de prendre le simple argmax — ce qui améliore la précision sur cette classe
+# minoritaire (8.7 % du dataset) de 0.33 → 0.55.
+SEUIL_XGBOOST_CLASSE_0 = 0.63
 
 # Noms lisibles des 3 classes créées par le clustering K-Means
 #   Classe 0 → peu de bornes par commune

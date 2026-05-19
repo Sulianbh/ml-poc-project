@@ -31,9 +31,9 @@ recall_macro     | float  | Rappel moyen sur les 3 classes (0.0 à 1.0)
 Exemple de contenu du CSV :
 ─────────────────────────────────────────────────────────────────────────────
 model_key,model_name,accuracy,f1_weighted,f1_macro,precision_macro,recall_macro
-logistic_regression,Logistic Regression,0.6019,0.5911,0.5116,0.5733,0.4956
-knn,K-Nearest Neighbors,0.7372,0.7374,0.6640,0.6647,0.6636
-xgboost,XGBoost,0.9964,0.9964,0.9920,0.9920,0.9920
+logistic_regression,Logistic Regression,0.5360,0.5559,0.4969,0.5094,0.5708
+knn,K-Nearest Neighbors,0.6204,0.6151,0.5843,0.6044,0.5796
+xgboost,XGBoost,0.6046,0.6106,0.5641,0.5642,0.6175
 
 ⚠️  Ce fichier est fourni par le template du cours et ne doit pas être modifié.
     Il est importé et utilisé automatiquement par scripts/main.py et src/app.py.
@@ -80,11 +80,11 @@ def write_metrics(lignes_metriques: Iterable[dict[str, object]]) -> pd.DataFrame
           - "model_name" (str)   : nom lisible du modèle (ex: "XGBoost")
           - "model_path" (str)   : chemin vers le fichier .joblib
         Et les métriques retournées par compute_metrics() :
-          - "accuracy"         (float) : ex: 0.9964
-          - "f1_weighted"      (float) : ex: 0.9964
-          - "f1_macro"         (float) : ex: 0.9920
-          - "precision_macro"  (float) : ex: 0.9920
-          - "recall_macro"     (float) : ex: 0.9920
+          - "accuracy"         (float) : ex: 0.6046
+          - "f1_weighted"      (float) : ex: 0.6106
+          - "f1_macro"         (float) : ex: 0.5641
+          - "precision_macro"  (float) : ex: 0.5642
+          - "recall_macro"     (float) : ex: 0.6175
 
     Retourne :
     ----------
@@ -94,8 +94,8 @@ def write_metrics(lignes_metriques: Iterable[dict[str, object]]) -> pd.DataFrame
     Exemple d'utilisation (par scripts/main.py) :
     ----------------------------------------------
     lignes = [
-        {"model_key": "xgboost", "model_name": "XGBoost", "accuracy": 0.996, ...},
-        {"model_key": "knn",     "model_name": "KNN",     "accuracy": 0.737, ...},
+        {"model_key": "xgboost", "model_name": "XGBoost", "accuracy": 0.605, ...},
+        {"model_key": "knn",     "model_name": "KNN",     "accuracy": 0.620, ...},
     ]
     tableau = write_metrics(lignes)
     """
@@ -147,9 +147,9 @@ def lire_metriques() -> pd.DataFrame | None:
     Exemple de DataFrame retourné :
     --------------------------------
            model_key          model_name  accuracy  f1_weighted
-    0  logistic_regression  Logistic Regression    0.6019       0.5911
-    1              knn  K-Nearest Neighbors    0.7372       0.7374
-    2          xgboost              XGBoost    0.9964       0.9964
+    0  logistic_regression  Logistic Regression    0.5360       0.5559
+    1              knn  K-Nearest Neighbors    0.6204       0.6151
+    2          xgboost              XGBoost    0.6046       0.6106
     """
 
     # Vérification de l'existence du fichier avant toute lecture

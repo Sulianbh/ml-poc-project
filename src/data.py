@@ -9,7 +9,7 @@ et de test.
 Dataset utilisé :
   - Fichier  : data/processed/allego_labeled.csv
   - Origine  : bornes de recharge IRVE, opérateur Allego (7 469 points de charge)
-  - Features : 11 variables numériques décrivant chaque borne
+  - Features : 9 variables numériques décrivant chaque borne
   - Cible    : label de classe (0 = Sous-équipé, 1 = Normalement équipé, 2 = Bien équipé)
 
 ⚠️  Ce fichier ne doit pas être lancé directement.
@@ -49,7 +49,7 @@ def load_dataset_split() -> tuple[Any, Any, Any, Any]:
     Processus détaillé :
     --------------------
     1. Lecture du fichier CSV allego_labeled.csv depuis data/processed/.
-    2. Extraction de la matrice de features (11 colonnes numériques).
+    2. Extraction de la matrice de features (9 colonnes numériques).
     3. Extraction du vecteur cible (colonne "label" : valeur 0, 1 ou 2).
     4. Division du dataset en deux sous-ensembles :
          - Entraînement (80 %) : utilisé pour ajuster les paramètres du modèle.
@@ -66,8 +66,8 @@ def load_dataset_split() -> tuple[Any, Any, Any, Any]:
     Retourne :
     ----------
     tuple : (features_entrainement, features_test, cibles_entrainement, cibles_test)
-        features_entrainement (DataFrame) : 11 features pour les 80 % d'entraînement
-        features_test         (DataFrame) : 11 features pour les 20 % de test
+        features_entrainement (DataFrame) : 9 features pour les 80 % d'entraînement
+        features_test         (DataFrame) : 9 features pour les 20 % de test
         cibles_entrainement   (Series)    : labels 0/1/2 pour les 80 % d'entraînement
         cibles_test           (Series)    : labels 0/1/2 pour les 20 % de test
 
@@ -82,8 +82,8 @@ def load_dataset_split() -> tuple[Any, Any, Any, Any]:
     tableau_donnees = pd.read_csv(FICHIER_DONNEES_TRAITEES)
 
     # ── Étape 2 : Extraction de la matrice de features ───────────────────────
-    # On sélectionne uniquement les 11 colonnes qui seront données en entrée au modèle
-    # Les autres colonnes (ex: consolidated_commune) sont des métadonnées non utilisées
+    # On sélectionne uniquement les 9 colonnes qui seront données en entrée au modèle
+    # Les autres colonnes (ex: consolidated_commune, latitude, longitude) sont des métadonnées
     matrice_features = tableau_donnees[COLONNES_FEATURES]
 
     # ── Étape 3 : Extraction du vecteur cible ────────────────────────────────
