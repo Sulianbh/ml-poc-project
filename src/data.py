@@ -1,7 +1,20 @@
-"""Student-owned dataset loading contract.
+"""
+Chargement et division du dataset — Contrat étudiant.
 
-Students must implement ``load_dataset_split`` so that ``scripts/main.py`` can
-evaluate every configured model on the same test split.
+Ce module implémente la fonction load_dataset_split() imposée par le template
+du cours. Cette fonction est appelée automatiquement par scripts/main.py
+pour charger le dataset traité, puis le diviser en ensembles d'entraînement
+et de test.
+
+Dataset utilisé :
+  - Fichier  : data/processed/allego_labeled.csv
+  - Origine  : bornes de recharge IRVE, opérateur Allego (7 469 points de charge)
+  - Features : 11 variables numériques décrivant chaque borne
+  - Cible    : label de classe (0 = Sous-équipé, 1 = Normalement équipé, 2 = Bien équipé)
+
+⚠️  Ce fichier ne doit pas être lancé directement.
+    Il est importé par scripts/main.py.
+    Pour générer le CSV, lancer d'abord : python scripts/train.py
 """
 
 from __future__ import annotations
@@ -11,42 +24,81 @@ from typing import Any
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from config import DATA_DIR
+from config import COLONNE_CIBLE, COLONNES_FEATURES, FICHIER_DONNEES_TRAITEES
 
-PROCESSED_CSV = DATA_DIR / "processed" / "allego_labeled.csv"
 
-FEATURE_COLS = [
-    "puissance_nominale",
-    "prise_type_ef",
-    "prise_type_2",
-    "prise_type_combo_ccs",
-    "prise_type_chademo",
-    "prise_type_autre",
-    "implantation_encoded",
-    "acces_libre",
-    "nbre_pdc",
-    "latitude",
-    "longitude",
-]
+# ═══════════════════════════════════════════════════════════════
+# CONSTANTES
+# ═══════════════════════════════════════════════════════════════
 
+# FICHIER_DONNEES_TRAITEES, COLONNES_FEATURES et COLONNE_CIBLE sont importés depuis config.py.
+
+
+# ═══════════════════════════════════════════════════════════════
+# FONCTION PRINCIPALE (CONTRAT TEMPLATE)
+# ═══════════════════════════════════════════════════════════════
 
 def load_dataset_split() -> tuple[Any, Any, Any, Any]:
-    """Return the dataset split used for model evaluation.
+    """
+    Charge le dataset Allego traité et le divise en ensembles d'entraînement et de test.
 
-    Expected return value:
-        A tuple ``(X_train, X_test, y_train, y_test)``.
+    Cette fonction est le contrat imposé par le template du cours.
+    Son nom exact (load_dataset_split) et sa signature doivent être conservés
+    car scripts/main.py l'appelle automatiquement.
 
-    Constraints:
-    - ``X_train`` and ``X_test`` must contain feature data in a format accepted
-      by the trained models stored in ``config.MODELS``.
-    - ``y_train`` and ``y_test`` must contain the corresponding targets.
-    - ``y_test`` must align with the predictions produced by each loaded model.
+    Processus détaillé :
+    --------------------
+    1. Lecture du fichier CSV allego_labeled.csv depuis data/processed/.
+    2. Extraction de la matrice de features (11 colonnes numériques).
+    3. Extraction du vecteur cible (colonne "label" : valeur 0, 1 ou 2).
+    4. Division du dataset en deux sous-ensembles :
+         - Entraînement (80 %) : utilisé pour ajuster les paramètres du modèle.
+         - Test         (20 %) : utilisé pour évaluer les performances réelles.
+       La division est "stratifiée" (stratify=vecteur_cibles) : cela garantit
+       que les proportions des 3 classes sont identiques dans les deux ensembles.
+       Sans stratification, par malchance, le set de test pourrait contenir
+       uniquement des communes "bien équipées" et fausser l'évaluation.
 
-    Typical choices for the return types are ``pandas.DataFrame`` /
-    ``pandas.Series`` or ``numpy.ndarray``.
+    Paramètres :
+    -----------
+    Aucun — le chemin du fichier est défini dans FICHIER_DONNEES_TRAITEES.
+
+    Retourne :
+    ----------
+    tuple : (features_entrainement, features_test, cibles_entrainement, cibles_test)
+        features_entrainement (DataFrame) : 11 features pour les 80 % d'entraînement
+        features_test         (DataFrame) : 11 features pour les 20 % de test
+        cibles_entrainement   (Series)    : labels 0/1/2 pour les 80 % d'entraînement
+        cibles_test           (Series)    : labels 0/1/2 pour les 20 % de test
+
+    Lève :
+    ------
+    FileNotFoundError : si allego_labeled.csv n'existe pas encore.
+        Solution → lancer d'abord : python scripts/train.py
     """
 
-    df = pd.read_csv(PROCESSED_CSV)
-    X = df[FEATURE_COLS]
-    y = df["label"]
-    return tuple(train_test_split(X, y, test_size=0.2, random_state=42, stratify=y))
+    # ── Étape 1 : Lecture du dataset traité ──────────────────────────────────
+    # Le fichier CSV contient une ligne par point de charge avec ses features et son label
+    tableau_donnees = pd.read_csv(FICHIER_DONNEES_TRAITEES)
+
+    # ── Étape 2 : Extraction de la matrice de features ───────────────────────
+    # On sélectionne uniquement les 11 colonnes qui seront données en entrée au modèle
+    # Les autres colonnes (ex: consolidated_commune) sont des métadonnées non utilisées
+    matrice_features = tableau_donnees[COLONNES_FEATURES]
+
+    # ── Étape 3 : Extraction du vecteur cible ────────────────────────────────
+    # La colonne "label" contient l'étiquette de classe créée par K-Means (0, 1 ou 2)
+    vecteur_cibles = tableau_donnees[COLONNE_CIBLE]
+
+    # ── Étape 4 : Division stratifiée 80 % / 20 % ────────────────────────────
+    # random_state=42 : fixe la graine aléatoire → résultats identiques à chaque exécution
+    # stratify        : préserve les proportions des 3 classes dans chaque sous-ensemble
+    return tuple(
+        train_test_split(
+            matrice_features,
+            vecteur_cibles,
+            test_size=0.2,
+            random_state=42,
+            stratify=vecteur_cibles,
+        )
+    )
