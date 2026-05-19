@@ -41,6 +41,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
 
 # ── Résolution du chemin racine du projet ────────────────────────────────────
@@ -151,8 +152,6 @@ def charger_et_filtrer_donnees() -> pd.DataFrame:
     ------
     FileNotFoundError : si le fichier CSV brut est absent de data/raw/.
     """
-    journalisation.info("[1/5] Chargement du dataset brut IRVE national...")
-
     # low_memory=False : force pandas à lire tout le fichier avant de déduire
     # les types de colonnes, évitant les erreurs de type sur les grands fichiers
     journalisation.info("[1/5] Chargement et filtrage du dataset IRVE...")
@@ -207,7 +206,7 @@ def creer_features(donnees_allego: pd.DataFrame) -> pd.DataFrame:
     1. Conversion des colonnes booléennes (types de prises) en float 0.0/1.0
     2. Encodage ordinal du type d'implantation (texte → entier 0-4)
     3. Binarisation de la condition d'accès (libre vs. restreint)
-    4. Extraction et nettoyage des coordonnées GPS
+    4. Extraction des coordonnées GPS (métadonnées d'affichage — non utilisées comme features)
     5. Suppression des lignes avec des valeurs manquantes critiques
 
     Paramètres :
@@ -247,17 +246,22 @@ def creer_features(donnees_allego: pd.DataFrame) -> pd.DataFrame:
         .astype(float)
     )
 
-    # ── Coordonnées GPS et valeurs numériques ─────────────────────────────────
+    # ── Valeurs numériques ────────────────────────────────────────────────────
     # errors="coerce" : les valeurs non convertibles deviennent NaN (plutôt qu'une erreur)
-    donnees_allego["latitude"]          = pd.to_numeric(donnees_allego["consolidated_latitude"],  errors="coerce")
-    donnees_allego["longitude"]         = pd.to_numeric(donnees_allego["consolidated_longitude"], errors="coerce")
-    donnees_allego["puissance_nominale"] = pd.to_numeric(donnees_allego["puissance_nominale"],    errors="coerce")
-    donnees_allego["nbre_pdc"]          = pd.to_numeric(donnees_allego["nbre_pdc"],               errors="coerce")
+    donnees_allego["puissance_nominale"] = pd.to_numeric(donnees_allego["puissance_nominale"], errors="coerce")
+    donnees_allego["nbre_pdc"]           = pd.to_numeric(donnees_allego["nbre_pdc"],           errors="coerce")
+
+    # ── Coordonnées GPS (métadonnées d'affichage uniquement) ─────────────────
+    # latitude et longitude ne sont PAS des features ML (elles sont absentes de
+    # COLONNES_FEATURES). Elles sont conservées dans le CSV uniquement pour :
+    #   - la carte interactive de l'interface Streamlit
+    #   - l'affichage des coordonnées dans le sélecteur de commune
+    donnees_allego["latitude"]  = pd.to_numeric(donnees_allego["consolidated_latitude"],  errors="coerce")
+    donnees_allego["longitude"] = pd.to_numeric(donnees_allego["consolidated_longitude"], errors="coerce")
 
     # ── Suppression des lignes avec valeurs manquantes critiques ─────────────
-    # Une borne sans coordonnées GPS ou sans puissance ne peut pas être utilisée
     nombre_avant_nettoyage = len(donnees_allego)
-    donnees_allego = donnees_allego.dropna(subset=["latitude", "longitude", "puissance_nominale"])
+    donnees_allego = donnees_allego.dropna(subset=["puissance_nominale"])
     nombre_supprime = nombre_avant_nettoyage - len(donnees_allego)
     journalisation.info(f"  → {nombre_supprime} lignes supprimées (valeurs manquantes critiques)")
     journalisation.info(f"  → {len(donnees_allego):,} points de charge conservés après nettoyage")
@@ -395,9 +399,10 @@ def sauvegarder_dataset_traite(donnees_labelisees: pd.DataFrame) -> pd.DataFrame
     Sélectionne les colonnes utiles et sauvegarde le dataset traité au format CSV.
 
     On conserve uniquement :
-    - consolidated_commune : métadonnée de commune (non utilisée comme feature, mais
-                             utile pour l'interface Streamlit)
-    - Les 11 colonnes de features
+    - consolidated_commune : métadonnée — nom de la commune (non utilisée comme feature)
+    - latitude / longitude : métadonnées d'affichage — carte et sélecteur de commune
+                             dans l'interface Streamlit (non utilisées comme features)
+    - Les 9 colonnes de features (définies dans COLONNES_FEATURES)
     - La colonne cible (label)
 
     Paramètres :
@@ -410,8 +415,9 @@ def sauvegarder_dataset_traite(donnees_labelisees: pd.DataFrame) -> pd.DataFrame
     pd.DataFrame : sous-ensemble des colonnes utiles, également sauvegardé en CSV.
     """
     # Sélection des colonnes à conserver
-    # "consolidated_commune" est une métadonnée (identifiant lisible de la commune)
-    colonnes_a_garder = ["consolidated_commune"] + COLONNES_FEATURES + [COLONNE_CIBLE]
+    # consolidated_commune, latitude, longitude sont des métadonnées d'affichage.
+    # Elles ne sont pas dans COLONNES_FEATURES et ne sont jamais données aux modèles.
+    colonnes_a_garder = ["consolidated_commune", "latitude", "longitude"] + COLONNES_FEATURES + [COLONNE_CIBLE]
     dataset_final = donnees_labelisees[colonnes_a_garder].copy()
 
     # Sauvegarde au format CSV (sans la colonne d'index pandas)
@@ -465,7 +471,7 @@ def entrainer_et_sauvegarder_modeles(
     Paramètres :
     -----------
     features_entrainement : pd.DataFrame
-        Matrice de features pour les 80 % d'entraînement (11 colonnes).
+        Matrice de features pour les 80 % d'entraînement (9 colonnes).
     cibles_entrainement : pd.Series
         Vecteur de labels correspondants (valeurs 0, 1 ou 2).
 
@@ -475,6 +481,20 @@ def entrainer_et_sauvegarder_modeles(
     """
     journalisation.info("[5/5] Entraînement des modèles...")
 
+    # ── Re-pondération des classes ────────────────────────────────────────────
+    # La classe 0 (Sous-équipé) représente ~8.7 % du dataset.
+    # compute_sample_weight("balanced") calcule un poids par échantillon inversement
+    # proportionnel à la fréquence de sa classe, de sorte que chaque classe contribue
+    # équitablement à la perte, même si elle est minoritaire.
+    #
+    #   poids_classe_0  ≈  1 / (3 × 0.087)  ≈  3.8×
+    #   poids_classe_1  ≈  1 / (3 × 0.465)  ≈  0.7×
+    #   poids_classe_2  ≈  1 / (3 × 0.448)  ≈  0.7×
+    #
+    # Résultat attendu : meilleur rappel sur la classe 0 (communes sous-équipées),
+    # au prix d'une légère baisse de précision sur les classes majoritaires.
+    poids_echantillons = compute_sample_weight("balanced", cibles_entrainement)
+
     # Définition des 3 modèles à entraîner
     modeles_a_entrainer = {
         # Pipeline = chaîne de transformations : normalisation → classification
@@ -482,21 +502,26 @@ def entrainer_et_sauvegarder_modeles(
         "logistic_regression": Pipeline([
             ("normalisation", StandardScaler()),
             ("classificateur", LogisticRegression(
-                max_iter=1000,    # nombre maximal d'itérations pour la convergence
-                random_state=42,  # reproductibilité
-                C=1.0,            # inverse de la force de régularisation
+                max_iter=1000,          # nombre maximal d'itérations pour la convergence
+                random_state=42,        # reproductibilité
+                C=1.0,                  # inverse de la force de régularisation
+                class_weight="balanced", # re-pondère la perte selon la fréquence de chaque classe
             )),
         ]),
 
+        # KNeighborsClassifier ne supporte pas class_weight ni sample_weight.
+        # Sa performance sur la classe minoritaire dépend uniquement de la densité
+        # locale des voisins dans l'espace des features.
         "knn": Pipeline([
             ("normalisation", StandardScaler()),
             ("classificateur", KNeighborsClassifier(
-                n_neighbors=7,          # nombre de voisins à considérer
-                metric="euclidean",     # distance euclidienne standard
+                n_neighbors=7,      # nombre de voisins à considérer
+                metric="euclidean", # distance euclidienne standard
             )),
         ]),
 
-        # XGBoost n'a pas besoin de normalisation → pas de Pipeline
+        # XGBoost n'a pas besoin de normalisation → pas de Pipeline.
+        # La re-pondération se fait via sample_weight passé au moment du fit().
         "xgboost": XGBClassifier(
             n_estimators=200,       # nombre d'arbres de décision
             max_depth=6,            # profondeur maximale de chaque arbre
@@ -507,11 +532,21 @@ def entrainer_et_sauvegarder_modeles(
         ),
     }
 
+    # sample_weight est passé à fit() uniquement pour les modèles qui le supportent.
+    # LR l'intègre via class_weight="balanced" (au niveau du constructeur).
+    # KNN ne le supporte pas.
+    # XGBoost le reçoit directement dans fit().
+    params_fit = {
+        "logistic_regression": {},
+        "knn":                 {},
+        "xgboost":             {"sample_weight": poids_echantillons},
+    }
+
     # Entraînement et sauvegarde de chaque modèle
     for nom_modele, modele in modeles_a_entrainer.items():
 
         # Ajustement du modèle sur les données d'entraînement
-        modele.fit(features_entrainement, cibles_entrainement)
+        modele.fit(features_entrainement, cibles_entrainement, **params_fit[nom_modele])
 
         # Chemin de sauvegarde du fichier .joblib
         chemin_sauvegarde = REPERTOIRE_MODELES / f"{nom_modele}.joblib"

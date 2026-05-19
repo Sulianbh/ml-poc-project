@@ -59,11 +59,11 @@ def compute_metrics(valeurs_reelles: Any, valeurs_predites: Any) -> dict[str, fl
         Les clés deviennent les noms de colonnes dans results/model_metrics.csv.
         Exemple :
         {
-            "accuracy"       : 0.9964,
-            "f1_weighted"    : 0.9964,
-            "f1_macro"       : 0.9920,
-            "precision_macro": 0.9920,
-            "recall_macro"   : 0.9920,
+            "accuracy"       : 0.6046,
+            "f1_weighted"    : 0.6106,
+            "f1_macro"       : 0.5641,
+            "precision_macro": 0.5642,
+            "recall_macro"   : 0.6175,
         }
 
     Notes techniques :

@@ -7,10 +7,11 @@ du projet. Ils doivent être lancés dans l'ordre depuis la racine du projet.
 
 ## Contenu du dossier
 
-| Fichier       | Rôle                                            | Modifiable ?              |
-|---------------|-------------------------------------------------|---------------------------|
-| `train.py`    | Étape 1 — Prépare les données et entraîne les modèles | **Oui** — code étudiant  |
-| `main.py`     | Étape 2 — Évalue les modèles et lance l'interface     | **Non** — fourni par le cours |
+| Fichier                   | Rôle                                                  | Modifiable ?                  |
+|---------------------------|-------------------------------------------------------|-------------------------------|
+| `train.py`                | Étape 1 — Prépare les données et entraîne les modèles | **Oui** — code étudiant       |
+| `main.py`                 | Étape 2 — Évalue les modèles et lance l'interface     | **Non** — fourni par le cours |
+| `threshold_analysis.py`   | Script d'analyse du seuil de décision XGBoost         | **Oui** — code étudiant       |
 
 ---
 
@@ -24,10 +25,13 @@ python scripts/train.py
 
 # Étape 2 : évalue les modèles et lance l'interface Streamlit
 python scripts/main.py
+
+# Optionnel : analyse du seuil de décision XGBoost (après train.py et main.py)
+python scripts/threshold_analysis.py
 ```
 
-> ⚠️ `main.py` dépend des fichiers produits par `train.py`.
-> Lancer `main.py` sans avoir lancé `train.py` d'abord provoque une `FileNotFoundError`.
+> ⚠️ `main.py` et `threshold_analysis.py` dépendent des fichiers produits par `train.py`.
+> Les lancer sans avoir lancé `train.py` d'abord provoque une `FileNotFoundError`.
 
 ---
 
@@ -43,13 +47,13 @@ C'est le seul script qui lit le fichier brut IRVE et le seul qui écrit dans
 
 ### Ce qu'il produit
 
-| Fichier généré                          | Description                              |
-|-----------------------------------------|------------------------------------------|
-| `data/processed/allego_labeled.csv`     | Dataset Allego nettoyé, 5 687 lignes, 13 colonnes |
-| `models/logistic_regression.joblib`     | Modèle Pipeline (StandardScaler + LR) entraîné |
-| `models/knn.joblib`                     | Modèle Pipeline (StandardScaler + KNN) entraîné |
-| `models/xgboost.joblib`                 | Modèle XGBoost entraîné                  |
-| `logs/train_YYYYMMDD_HHMMSS.log`        | Journal horodaté de l'exécution          |
+| Fichier généré                          | Description                                                           |
+|-----------------------------------------|-----------------------------------------------------------------------|
+| `data/processed/allego_labeled.csv`     | Dataset Allego nettoyé, 5 687 lignes, 13 colonnes (2 GPS + 9 features + label + commune) |
+| `models/logistic_regression.joblib`     | Pipeline (StandardScaler + LR, class_weight="balanced") entraîné     |
+| `models/knn.joblib`                     | Pipeline (StandardScaler + KNN k=7) entraîné                         |
+| `models/xgboost.joblib`                 | XGBoost entraîné avec sample_weight="balanced"                       |
+| `logs/train_YYYYMMDD_HHMMSS.log`        | Journal horodaté de l'exécution                                      |
 
 ### Pipeline en 5 étapes
 
@@ -64,7 +68,8 @@ Fichier brut IRVE (224 476 lignes)
          │  → convertit les colonnes booléennes en 0.0/1.0
          │  → encode implantation_station en entier (0–4)
          │  → binarise condition_acces ("libre" → 1.0)
-         │  → convertit lat/lon/puissance/nbre_pdc en float
+         │  → convertit puissance_nominale et nbre_pdc en float
+         │  → extrait latitude/longitude (métadonnées d'affichage uniquement)
          │  → supprime les lignes avec valeurs manquantes critiques
          │
          ▼  Étape 3 : creer_labels_par_clustering()

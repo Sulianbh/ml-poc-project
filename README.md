@@ -48,8 +48,8 @@ Dataset IRVE brut (224 476 PDC)
        ▼  Filtrage opérateur
 Allego uniquement (7 469 PDC)
        │
-       ▼  Feature engineering (11 features)
-puissance, type prise ×5, implantation, accès, nbre_pdc, lat, lon
+       ▼  Feature engineering (9 features)
+puissance, type prise ×5, implantation, accès, nbre_pdc
        │
        ▼  Clustering K-Means (k=3, par commune)
 Labels : 0 = Sous-équipé | 1 = Normalement équipé | 2 = Bien équipé
@@ -63,30 +63,30 @@ Accuracy | F1 weighted | F1 macro | Précision macro | Rappel macro
 
 ## Modèles
 
-| Modèle | Particularité | Normalisation |
-|---|---|---|
-| Logistic Regression | Baseline linéaire multi-classe | StandardScaler |
-| K-Nearest Neighbors | Distance euclidienne, k=7 | StandardScaler |
-| XGBoost | Gradient boosting, 200 estimateurs, depth=6 | Non requise |
+| Modèle | Particularité | Normalisation | Re-pondération |
+|---|---|---|---|
+| Logistic Regression | Baseline linéaire multi-classe | StandardScaler | `class_weight="balanced"` |
+| K-Nearest Neighbors | Distance euclidienne, k=7 | StandardScaler | Non supportée |
+| XGBoost | Gradient boosting, 200 estimateurs, depth=6 | Non requise | `sample_weight="balanced"` |
 
 ## Résultats
 
+> Scores calculés par `scripts/main.py` (predict() standard).
+> XGBoost avec seuil 0.63 sur P(Sous-équipé) : accuracy ≈ 0.650.
+
 | Modèle | Accuracy | F1 weighted | F1 macro |
 |---|---|---|---|
-| Logistic Regression | 0.602 | 0.591 | 0.512 |
-| K-Nearest Neighbors | 0.737 | 0.737 | 0.664 |
-| **XGBoost** | **0.996** | **0.996** | **0.992** |
+| Logistic Regression | 0.536 | 0.556 | 0.497 |
+| K-Nearest Neighbors | 0.620 | 0.615 | 0.584 |
+| **XGBoost** | **0.605** | **0.611** | **0.564** |
 
-### Note sur la performance de XGBoost
+### Note sur les résultats
 
-XGBoost atteint 99.6% d'accuracy, ce qui peut sembler surprenant.
-C'est un **artifact connu du design** de ce PoC :
-
-- Les labels ont été créés par K-Means **par commune** sur la densité de PDC (variable géographique).
-- Le jeu de features inclut **latitude et longitude**, qui encodent directement l'appartenance géographique d'un PDC à sa commune.
-- XGBoost apprend ainsi à reconstruire presque parfaitement la partition K-Means à partir des coordonnées GPS — tâche trivialement facile pour un gradient boosting.
-
-Ce résultat démontre la cohérence du pipeline (les labels sont stables et reproductibles) mais **ne doit pas être interprété comme une vraie capacité de généralisation** sur de nouvelles données sans GPS. Pour une version production, il faudrait soit supprimer lat/lon des features, soit labelliser les communes de façon indépendante des coordonnées.
+Ces scores reflètent la vraie capacité de généralisation des modèles sur les
+**9 features techniques** des bornes. La classe 0 (Sous-équipé, 8.7 %) est la
+plus difficile à détecter. Le script `scripts/threshold_analysis.py` analyse
+l'optimisation du seuil de décision XGBoost pour améliorer la précision sur
+cette classe minoritaire.
 
 ## Installation
 

@@ -13,12 +13,16 @@ Pages disponibles :
 from __future__ import annotations
 
 import joblib
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from config import COLONNE_CIBLE, COLONNES_FEATURES, FICHIER_DONNEES_TRAITEES, MODEL_METRICS_FILE, MODELS, NOMS_LABELS
+from config import (
+    COLONNE_CIBLE, COLONNES_FEATURES, FICHIER_DONNEES_TRAITEES,
+    MODEL_METRICS_FILE, MODELS, NOMS_LABELS, SEUIL_XGBOOST_CLASSE_0,
+)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -247,6 +251,34 @@ def _charger_modele_en_cache(chemin_fichier_modele):
     return joblib.load(chemin_fichier_modele)
 
 
+def predire(modele, donnees: pd.DataFrame, cle_modele: str) -> tuple[int, np.ndarray | None]:
+    """
+    Prédit la classe d'une station et retourne les probabilités associées.
+
+    Pour XGBoost, applique le seuil optimal SEUIL_XGBOOST_CLASSE_0 sur
+    P(Sous-équipé) au lieu du simple argmax :
+      - Si P(classe=0) >= SEUIL_XGBOOST_CLASSE_0  →  prédit 0
+      - Sinon  →  argmax(P(classe=1), P(classe=2))
+    Cette règle améliore la précision sur la classe minoritaire (0.33 → 0.55).
+
+    Pour Logistic Regression et KNN, le comportement est inchangé (predict).
+
+    Retourne (classe_predite, probabilites) — probabilites vaut None si le
+    modèle ne supporte pas predict_proba.
+    """
+    probas = modele.predict_proba(donnees)[0] if hasattr(modele, "predict_proba") else None
+
+    if cle_modele == "xgboost" and probas is not None:
+        classe = int(
+            0 if probas[0] >= SEUIL_XGBOOST_CLASSE_0
+            else 1 + int(np.argmax(probas[1:]))
+        )
+    else:
+        classe = int(modele.predict(donnees)[0])
+
+    return classe, probas
+
+
 # ═══════════════════════════════════════════════════════════════
 # HELPERS — COMPOSANTS VISUELS RÉUTILISABLES
 # ═══════════════════════════════════════════════════════════════
@@ -340,7 +372,7 @@ def html_pipeline_ml() -> str:
     etapes_pipeline = [
         ("1", "Dataset IRVE brut",               "224 476 points de charge — Etalab / data.gouv.fr"),
         ("2", "Filtrage opérateur Allego",        "7 469 points de charge retenus sur 294 communes"),
-        ("3", "Feature engineering",              "11 variables : puissance, connecteurs, implantation, GPS…"),
+        ("3", "Feature engineering",              "9 variables : puissance, connecteurs, implantation, accès…"),
         ("4", "Clustering K-Means (k = 3)",       "Labels : Sous-équipé · Normalement équipé · Bien équipé"),
         ("5", "Classification supervisée",        "3 modèles entraînés · split 80 % / 20 % stratifié"),
         ("6", "Évaluation",                       "Accuracy · F1 weighted · F1 macro · Précision · Rappel"),
@@ -492,7 +524,7 @@ def afficher_page_analyse(donnees: pd.DataFrame | None) -> None:
     - Un histogramme de la puissance nominale par label
     - Une carte interactive des communes (1 bulle = 1 commune)
     - Un graphique des types de connecteurs
-    - Un tableau des 11 features ML
+    - Un tableau des 9 features ML
     """
     afficher_entete_page(
         "Analyse",
@@ -624,10 +656,10 @@ def afficher_page_analyse(donnees: pd.DataFrame | None) -> None:
         )
 
     with colonne_tableau:
-        afficher_titre_section("11 Features ML", marge_haut="0rem")
+        afficher_titre_section("9 Features ML", marge_haut="0rem")
         tableau_features = pd.DataFrame({
             "Feature":  COLONNES_FEATURES,
-            "Type":     ["Float", "0/1", "0/1", "0/1", "0/1", "0/1", "0–4", "0/1", "Int", "Float", "Float"],
+            "Type":     ["Float", "0/1", "0/1", "0/1", "0/1", "0/1", "0–4", "0/1", "Int"],
         })
         st.dataframe(tableau_features, use_container_width=True, hide_index=True, height=320)
 
@@ -753,12 +785,12 @@ def afficher_page_prediction() -> None:
         format_func=lambda cle: MODELS[cle]["name"],
     )
 
-    # Avertissement spécifique à XGBoost qui prédit principalement via les coordonnées GPS
     if cle_modele == "xgboost":
         st.info(
-            "ℹ️ XGBoost base ses prédictions principalement sur la localisation GPS "
-            "(artifact du dataset). Pour voir l'impact des autres paramètres, "
-            "essaie **Logistic Regression** ou **KNN**."
+            f"ℹ️ Seuil de décision optimisé activé : "
+            f"P(Sous-équipé) ≥ **{SEUIL_XGBOOST_CLASSE_0}** "
+            f"(défaut ~0.33). "
+            f"Précision classe 0 : 55 % · Rappel : 50 % · F1 : 0.52."
         )
 
     chemin_modele = MODELS[cle_modele]["path"]
@@ -827,6 +859,8 @@ def afficher_page_prediction() -> None:
     if st.button("Lancer la prédiction", use_container_width=True, disabled=bouton_desactive):
 
         # Construction du vecteur de features dans l'ordre attendu par le modèle
+        # latitude et longitude sont utilisées uniquement pour l'affichage (carte, caption),
+        # elles ne font pas partie des 9 features transmises au modèle.
         donnees_prediction = pd.DataFrame([[
             puissance_nominale,
             float(prise_type_ef),
@@ -837,12 +871,10 @@ def afficher_page_prediction() -> None:
             type_implantation,
             float(acces_libre),
             nombre_pdc,
-            latitude,
-            longitude,
         ]], columns=COLONNES_FEATURES)
 
-        # Inférence : prédiction de la classe
-        prediction    = int(modele.predict(donnees_prediction)[0])
+        # Inférence : prédiction avec seuil optimisé pour XGBoost, predict() standard pour les autres
+        prediction, probabilites_brutes = predire(modele, donnees_prediction, cle_modele)
         nom_label     = NOMS_LABELS[prediction]
         couleur_label = COULEURS_LABELS[prediction]
         fond_label    = {
@@ -866,12 +898,11 @@ def afficher_page_prediction() -> None:
             unsafe_allow_html=True,
         )
 
-        # Graphique des probabilités (disponible uniquement pour les modèles avec predict_proba)
-        if hasattr(modele, "predict_proba"):
-            probabilites = modele.predict_proba(donnees_prediction)[0]
+        # Graphique des probabilités brutes (avant application du seuil)
+        if probabilites_brutes is not None:
             donnees_probabilites = pd.DataFrame({
                 "Niveau":       list(NOMS_LABELS.values()),
-                "Probabilité":  probabilites,
+                "Probabilité":  probabilites_brutes,
             })
             graphique_probabilites = px.bar(
                 donnees_probabilites,

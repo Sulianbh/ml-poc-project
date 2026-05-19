@@ -9,9 +9,9 @@ Chaque fichier `.joblib` est un modèle sérialisé, prêt à être rechargé po
 
 | Fichier                        | Taille  | Modèle                | Dernière génération    |
 |--------------------------------|---------|-----------------------|------------------------|
-| `logistic_regression.joblib`   | 2.4 Ko  | Régression logistique | 05 mai 2026 — 18:25:21 |
-| `knn.joblib`                   | 907 Ko  | K-Nearest Neighbors   | 05 mai 2026 — 18:25:21 |
-| `xgboost.joblib`               | 1.2 Mo  | XGBoost               | 05 mai 2026 — 18:25:21 |
+| `logistic_regression.joblib`   | ~2 Ko   | Régression logistique | générés par train.py   |
+| `knn.joblib`                   | ~650 Ko | K-Nearest Neighbors   | générés par train.py   |
+| `xgboost.joblib`               | ~1.2 Mo | XGBoost               | générés par train.py   |
 
 > Ces fichiers sont générés automatiquement par `python scripts/train.py`.
 > Ils ne doivent **jamais** être modifiés à la main.
@@ -47,13 +47,13 @@ Les trois modèles ont tous été entraînés sur **exactement les mêmes donné
 | Source                    | `data/processed/allego_labeled.csv`                    |
 | Nombre total de lignes    | 5 687 points de charge Allego                          |
 | Split entraînement / test | 80 % / 20 % — stratifié sur les labels                 |
-| Données d'entraînement    | **4 549 points de charge** (jamais montrés au modèle)  |
+| Données d'entraînement    | **4 549 points de charge**                             |
 | Données de test           | 1 138 points de charge (uniquement pour l'évaluation)  |
 | Graine aléatoire          | `random_state=42` (assure la reproductibilité)         |
-| Nombre de features        | 11 (voir tableau ci-dessous)                           |
+| Nombre de features        | 9 (voir tableau ci-dessous)                            |
 | Nombre de classes cibles  | 3 — `0` = Sous-équipé, `1` = Normalement équipé, `2` = Bien équipé |
 
-### Les 11 features fournies à chaque modèle
+### Les 9 features fournies à chaque modèle
 
 | Feature                | Type     | Description                                         |
 |------------------------|----------|-----------------------------------------------------|
@@ -66,12 +66,38 @@ Les trois modèles ont tous été entraînés sur **exactement les mêmes donné
 | `implantation_encoded` | entier   | Type d'emplacement encodé (0 à 4)                   |
 | `acces_libre`          | float    | Accès sans restriction (0.0 ou 1.0)                 |
 | `nbre_pdc`             | entier   | Nombre de points de charge sur la station           |
-| `latitude`             | float    | Coordonnée GPS nord-sud                             |
-| `longitude`            | float    | Coordonnée GPS est-ouest                            |
+
+> **Note :** `latitude` et `longitude` sont présentes dans `allego_labeled.csv` comme
+> métadonnées d'affichage (carte Streamlit), mais **ne sont pas fournies aux modèles**.
+> Leur inclusion créerait un artefact : les labels étant issus d'un K-Means sur les
+> communes (zones géographiques), les coordonnées GPS encodent directement la cible —
+> le modèle apprendrait à reconstruire la partition K-Means plutôt qu'à utiliser les
+> caractéristiques techniques des bornes.
 
 ---
 
-## Modèle 1 : `logistic_regression.joblib` (2.4 Ko)
+## Stratégie face au déséquilibre de classes
+
+La classe 0 (Sous-équipé) représente seulement **8.7 %** du dataset.
+Sans correction, les modèles tendent à ignorer cette classe minoritaire.
+Deux mécanismes sont appliqués :
+
+1. **Re-pondération des classes** : la perte de chaque erreur est pondérée
+   inversement à la fréquence de sa classe. La classe 0 reçoit un poids ≈ 3.8×
+   plus élevé que les classes 1 et 2.
+   - Logistic Regression : via `class_weight="balanced"` dans le constructeur.
+   - XGBoost : via `sample_weight=compute_sample_weight("balanced", y)` dans `fit()`.
+   - KNN : ne supporte ni `class_weight` ni `sample_weight`.
+
+2. **Seuil de décision optimisé (XGBoost uniquement)** : par défaut XGBoost prédit
+   `argmax(P₀, P₁, P₂)`. Un seuil personnalisé est appliqué sur P(Sous-équipé) :
+   `si P(classe=0) ≥ 0.63 → prédit 0, sinon argmax(P(1), P(2))`.
+   Ce seuil a été déterminé par `scripts/threshold_analysis.py` pour maximiser
+   le F1 de la classe 0.
+
+---
+
+## Modèle 1 : `logistic_regression.joblib`
 
 ### Rôle dans le projet
 
@@ -92,7 +118,7 @@ Classe 2 (Bien équipé)     : P₂ = σ(w₂ · X + b₂)
 ```
 
 **Limitation principale :** si les classes ne sont pas séparables par des droites/plans
-dans l'espace des features, ce modèle sous-performera.
+dans l'espace des 9 features, ce modèle sous-performera.
 
 ### Architecture sauvegardée : `Pipeline`
 
@@ -104,6 +130,7 @@ Pipeline
 │             → centre chaque feature (moyenne = 0, écart-type = 1)
 │             → nécessaire car LR est sensible aux échelles
 └── Étape 2 : LogisticRegression  (classification)
+              → class_weight="balanced" : re-pondère la perte selon la fréquence de chaque classe
               → apprend les frontières de décision
 ```
 
@@ -112,42 +139,42 @@ Sauvegarder le Pipeline entier (et pas seulement le classificateur) garantit que
 
 ### Hyperparamètres
 
-| Paramètre           | Valeur   | Explication                                                                    |
-|---------------------|----------|--------------------------------------------------------------------------------|
-| `max_iter`          | `1000`   | Nombre maximal d'itérations pour que l'algorithme converge. Augmenté car le défaut (100) causait des avertissements de non-convergence. |
-| `C`                 | `1.0`    | Inverse de la force de régularisation. C élevé = moins de régularisation = modèle plus flexible mais potentiellement surajusté. `1.0` est la valeur par défaut (équilibrée). |
-| `random_state`      | `42`     | Graine aléatoire pour assurer que les résultats sont identiques à chaque entraînement. |
-| `StandardScaler`    | défaut   | Normalise chaque feature : `x_normalisé = (x - moyenne) / écart_type`.        |
+| Paramètre           | Valeur      | Explication                                                                    |
+|---------------------|-------------|--------------------------------------------------------------------------------|
+| `max_iter`          | `1000`      | Nombre maximal d'itérations pour la convergence. Augmenté car le défaut (100) causait des avertissements. |
+| `C`                 | `1.0`       | Inverse de la force de régularisation. `1.0` est la valeur par défaut (équilibrée). |
+| `class_weight`      | `"balanced"`| Pondère la perte de chaque classe inversement à sa fréquence.                 |
+| `random_state`      | `42`        | Reproductibilité.                                                              |
+| `StandardScaler`    | défaut      | Normalise chaque feature : `x_normalisé = (x - moyenne) / écart_type`.        |
 
 ### Performance sur le jeu de test (1 138 bornes)
 
-| Métrique          | Score  | Interprétation                                       |
-|-------------------|--------|------------------------------------------------------|
-| Accuracy          | 0.602  | 60.2 % des bornes correctement classifiées           |
-| F1 weighted       | 0.591  | Équilibre précision/rappel (pondéré par classe)      |
-| F1 macro          | 0.512  | Score équitable sur les 3 classes                    |
-| Taille du fichier | 2.4 Ko | Très léger : uniquement des coefficients linéaires   |
+| Métrique          | Score  | Interprétation                                         |
+|-------------------|--------|--------------------------------------------------------|
+| Accuracy          | 0.536  | 53.6 % des bornes correctement classifiées             |
+| F1 weighted       | 0.556  | Équilibre précision/rappel (pondéré par classe)        |
+| F1 macro          | 0.497  | Score équitable sur les 3 classes                      |
 
-> **Interprétation :** 60.2 % d'accuracy est correct pour un baseline linéaire.
-> Le score bas montre que les frontières entre les 3 classes ne sont pas linéaires —
-> les modèles non linéaires (KNN, XGBoost) feront bien mieux.
+> **Interprétation :** la régression logistique confirme son rôle de baseline.
+> Les frontières de décision entre classes ne sont pas linéaires dans cet espace
+> de 9 features — les modèles non linéaires (KNN, XGBoost) font mieux.
 
 ---
 
-## Modèle 2 : `knn.joblib` (907 Ko)
+## Modèle 2 : `knn.joblib`
 
 ### Rôle dans le projet
 
-KNN est un **modèle non-paramétrique** qui améliore significativement sur la régression
-logistique en capturant des frontières de décision non linéaires.
-Sa grande taille (907 Ko) s'explique par le fait qu'il mémorise l'intégralité des données
+KNN est un **modèle non-paramétrique** qui améliore sur la régression logistique
+en capturant des frontières de décision non linéaires.
+Sa grande taille s'explique par le fait qu'il mémorise l'intégralité des données
 d'entraînement — c'est son mode de fonctionnement.
 
 ### Principe de fonctionnement
 
 KNN ne "s'entraîne" pas vraiment : il **mémorise tout le jeu de données d'entraînement**.
 Au moment de prédire, pour chaque nouvelle borne, il :
-1. Calcule la distance euclidienne avec les 4 549 bornes d'entraînement
+1. Calcule la distance euclidienne avec les 4 549 bornes d'entraînement (sur 9 features)
 2. Sélectionne les **7 bornes les plus proches** (k=7)
 3. Vote à la majorité parmi ces 7 voisins pour choisir la classe
 
@@ -155,19 +182,19 @@ Au moment de prédire, pour chaque nouvelle borne, il :
 Nouvelle borne → calcule distances → 7 voisins les plus proches → vote → classe prédite
 ```
 
-**Intuition géographique :** deux bornes dans la même commune seront proches dans l'espace
-des features (même latitude, longitude, puissance, type de prise). KNN exploite naturellement
-cette proximité.
+**Remarque :** KNN ne supporte pas la re-pondération des classes (`class_weight` ni
+`sample_weight`). Sa sensibilité à la classe minoritaire dépend uniquement de la
+densité locale des voisins dans l'espace des 9 features.
 
 ### Architecture sauvegardée : `Pipeline`
 
 ```
 Pipeline
 ├── Étape 1 : StandardScaler  (normalisation)
-│             → OBLIGATOIRE pour KNN : sans normalisation, latitude (≈ 48°)
-│             → dominerait puissance (≈ 100 kW) dans le calcul de distance
+│             → OBLIGATOIRE pour KNN : sans normalisation, puissance_nominale (≈ 0–400 kW)
+│             → dominerait nbre_pdc (≈ 1–36) dans le calcul de distance euclidienne
 └── Étape 2 : KNeighborsClassifier  (classification)
-              → mémorise les 4 549 points d'entraînement
+              → mémorise les 4 549 × 9 valeurs d'entraînement
               → calcule les distances à la prédiction
 ```
 
@@ -175,26 +202,26 @@ Pipeline
 
 | Paramètre       | Valeur        | Explication                                                                |
 |-----------------|---------------|----------------------------------------------------------------------------|
-| `n_neighbors`   | `7`           | Nombre de voisins à consulter. Valeur impaire (évite les égalités de vote). Assez grand pour lisser le bruit tout en restant local. |
-| `metric`        | `"euclidean"` | Distance euclidienne : `d = √(Σ(xᵢ - yᵢ)²)`. Standard pour des features numériques normalisées. |
+| `n_neighbors`   | `7`           | Nombre de voisins à consulter. Valeur impaire (évite les égalités de vote). |
+| `metric`        | `"euclidean"` | Distance euclidienne : `d = √(Σ(xᵢ - yᵢ)²)`.                            |
 | `StandardScaler`| défaut        | Normalise chaque feature avant le calcul des distances.                    |
 
 ### Performance sur le jeu de test (1 138 bornes)
 
 | Métrique          | Score  | Interprétation                                         |
 |-------------------|--------|--------------------------------------------------------|
-| Accuracy          | 0.737  | 73.7 % des bornes correctement classifiées             |
-| F1 weighted       | 0.737  | Équilibre précision/rappel (pondéré par classe)        |
-| F1 macro          | 0.664  | Score équitable sur les 3 classes                      |
-| Taille du fichier | 907 Ko | Grand : stocke les 4 549 × 11 valeurs d'entraînement   |
+| Accuracy          | 0.620  | 62.0 % des bornes correctement classifiées             |
+| F1 weighted       | 0.615  | Équilibre précision/rappel (pondéré par classe)        |
+| F1 macro          | 0.584  | Score équitable sur les 3 classes                      |
+| Taille du fichier | ~650 Ko| Grand : stocke les 4 549 × 9 valeurs d'entraînement   |
 
-> **Interprétation :** +13 points d'accuracy vs. régression logistique. La différence
-> s'explique par la capacité de KNN à capturer des groupes géographiquement cohérents.
-> La taille importante du fichier est normale : KNN ne compresse pas les données.
+> **Interprétation :** +8 points d'accuracy vs. régression logistique. KNN capture
+> des frontières non linéaires, ce qui lui permet de mieux discriminer les communes
+> en se basant sur la puissance, les types de prises et l'implantation.
 
 ---
 
-## Modèle 3 : `xgboost.joblib` (1.2 Mo)
+## Modèle 3 : `xgboost.joblib`
 
 ### Rôle dans le projet
 
@@ -212,7 +239,7 @@ Arbre 1 : prédit grossièrement les classes (erreur = 40 %)
 Arbre 2 : se concentre sur les erreurs de l'Arbre 1 (erreur = 25 %)
 Arbre 3 : se concentre sur les erreurs de l'Arbre 2 (erreur = 15 %)
 ...
-Arbre 200 : correction finale (erreur cumulée < 1 %)
+Arbre 200 : correction finale
 
 Prédiction finale = somme pondérée des 200 arbres
 ```
@@ -230,6 +257,7 @@ car aucun prétraitement n'est nécessaire.
 XGBClassifier
 ├── 200 arbres de décision entraînés séquentiellement
 ├── Chaque arbre corrige les erreurs du précédent (boosting)
+├── Entraîné avec sample_weight="balanced" (re-pondération de la classe 0)
 └── Prédiction = vote pondéré des 200 arbres
 ```
 
@@ -237,58 +265,50 @@ XGBClassifier
 
 | Paramètre        | Valeur        | Explication                                                                        |
 |------------------|---------------|------------------------------------------------------------------------------------|
-| `n_estimators`   | `200`         | Nombre d'arbres dans l'ensemble. Plus il y en a, plus le modèle est précis (jusqu'à un certain point). |
-| `max_depth`      | `6`           | Profondeur maximale de chaque arbre. Un arbre de profondeur 6 peut capturer des interactions complexes entre 6 features. |
-| `learning_rate`  | `0.1`         | Contribution de chaque arbre au résultat final. Valeur faible = apprentissage plus progressif et stable. |
-| `eval_metric`    | `"mlogloss"`  | Fonction de perte pour la classification multi-classe : minimise la log-vraisemblance négative. |
-| `random_state`   | `42`          | Graine aléatoire pour la reproductibilité.                                         |
+| `n_estimators`   | `200`         | Nombre d'arbres dans l'ensemble.                                                   |
+| `max_depth`      | `6`           | Profondeur maximale de chaque arbre (capture des interactions entre 6 features).   |
+| `learning_rate`  | `0.1`         | Contribution de chaque arbre. Valeur faible = apprentissage plus progressif.       |
+| `eval_metric`    | `"mlogloss"`  | Fonction de perte multi-classe : minimise la log-vraisemblance négative.           |
+| `random_state`   | `42`          | Reproductibilité.                                                                  |
 | `verbosity`      | `0`           | Désactive les messages de XGBoost pendant l'entraînement.                          |
+| `sample_weight`  | `balanced`    | Calculé via `compute_sample_weight("balanced", y)` — poids ≈ 3.8× sur la classe 0.|
+
+### Seuil de décision optimisé
+
+Par défaut, XGBoost prédit `argmax(P₀, P₁, P₂)`. En production, un seuil personnalisé
+est appliqué sur P(Sous-équipé) :
+
+```
+Si P(classe=0) ≥ 0.63  →  prédit 0 (Sous-équipé)
+Sinon                  →  argmax(P(classe=1), P(classe=2))
+```
+
+Ce seuil a été déterminé par `scripts/threshold_analysis.py` pour maximiser le F1 de
+la classe minoritaire.
 
 ### Performance sur le jeu de test (1 138 bornes)
 
-| Métrique          | Score  | Interprétation                                          |
-|-------------------|--------|---------------------------------------------------------|
-| Accuracy          | 0.996  | 99.6 % des bornes correctement classifiées              |
-| F1 weighted       | 0.996  | Quasi parfait sur toutes les classes                    |
-| F1 macro          | 0.992  | Même les classes minoritaires sont très bien détectées  |
-| Taille du fichier | 1.2 Mo | Contient la structure des 200 arbres de décision        |
-
-### ⚠️ Pourquoi ce score exceptionnel est un artefact
-
-Ce score de 99.6 % n'est **pas représentatif d'une vraie performance en production**.
-C'est une conséquence directe du design du projet :
-
-1. **Les labels ont été créés par K-Means** sur la densité de bornes par commune.
-   La densité est une propriété **géographique** : certaines zones (grandes villes,
-   axes autoroutiers) ont naturellement plus de bornes.
-
-2. **Les features incluent `latitude` et `longitude`**, qui encodent directement
-   la position géographique d'une borne — et donc son appartenance à sa commune.
-
-3. XGBoost apprend donc à **reconstruire la partition K-Means depuis les coordonnées GPS**,
-   une tâche triviale pour un gradient boosting de 200 arbres.
-
-```
-Situation réelle du modèle :
-labels ← K-Means(densité_par_commune) ← position_géographique ← latitude/longitude ← features
-
-XGBoost n'a qu'à faire le chemin inverse :
-latitude/longitude → position_géographique → label (quasi-parfait)
-```
-
-**Pour une version production**, il faudrait :
-- Supprimer `latitude` et `longitude` des features, ou
-- Créer des labels indépendants des coordonnées GPS
+| Métrique               | Baseline (argmax) | Avec seuil 0.63 | Interprétation                    |
+|------------------------|-------------------|-----------------|-----------------------------------|
+| Accuracy               | 0.605             | 0.650           | +4.5 points avec le seuil         |
+| F1 weighted            | 0.611             | ~0.646          | Meilleur équilibre global         |
+| F1 macro               | 0.564             | ~0.521          | F1 classe 0 : 0.44 → 0.52        |
+| Précision classe 0     | 0.330             | 0.551           | Moins de faux positifs classe 0   |
+| Rappel classe 0        | 0.657             | 0.495           | Trade-off précision/rappel        |
 
 ---
 
 ## Comparaison des 3 modèles
 
-| Modèle                | Accuracy | F1 macro | Taille  | Interprétable | Nécessite normalisation |
-|-----------------------|----------|----------|---------|---------------|-------------------------|
-| Logistic Regression   | 0.602    | 0.512    | 2.4 Ko  | Oui           | Oui (StandardScaler)    |
-| K-Nearest Neighbors   | 0.737    | 0.664    | 907 Ko  | Partiellement | Oui (StandardScaler)    |
-| **XGBoost**           | **0.996**| **0.992**| 1.2 Mo  | Non           | **Non**                 |
+| Modèle                | Accuracy | F1 macro | Taille   | Re-pondération | Seuil optimisé |
+|-----------------------|----------|----------|----------|----------------|----------------|
+| Logistic Regression   | 0.536    | 0.497    | ~2 Ko    | class_weight   | Non            |
+| K-Nearest Neighbors   | 0.620    | 0.584    | ~650 Ko  | Non supporté   | Non            |
+| **XGBoost**           | **0.650**| **~0.52**| ~1.2 Mo  | sample_weight  | **Oui (0.63)** |
+
+> Les scores XGBoost sont mesurés avec le seuil de décision activé.
+> Ces valeurs reflètent la vraie capacité de généralisation des modèles
+> sur les 9 features techniques des bornes.
 
 ---
 

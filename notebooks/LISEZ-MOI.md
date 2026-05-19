@@ -176,8 +176,8 @@ test, et analyser en détail leurs forces et faiblesses via des visualisations.
 | **3. Évaluation sur le jeu de test** | Pour chaque modèle : prédictions, `classification_report` complet (précision, rappel, F1 par classe) |
 | **4. Comparaison des métriques** | Tableau récapitulatif + graphique en barres groupées (Accuracy, F1 weighted, F1 macro) |
 | **5. Matrices de confusion** | Trois matrices côte à côte — révèle quelles classes sont confondues par chaque modèle |
-| **6. Importance des features (XGBoost)** | Graphique horizontal des importances — `latitude` et `longitude` en rouge pour signaler l'artefact |
-| **7. Conclusion** | Tableau comparatif final et interprétation du score XGBoost |
+| **6. Importance des features (XGBoost)** | Graphique horizontal des importances des 9 features sur la prédiction |
+| **7. Conclusion** | Tableau comparatif final et discussion sur le déséquilibre de classes |
 
 ### Graphiques produits
 
@@ -185,7 +185,7 @@ test, et analyser en détail leurs forces et faiblesses via des visualisations.
 |------------------------------------------|----------------------------------------------------------------------|
 | `plots/09_comparaison_modeles.png`        | Barres groupées : Accuracy / F1 weighted / F1 macro des 3 modèles   |
 | `plots/10_matrices_confusion.png`         | 3 matrices de confusion côte à côte                                  |
-| `plots/11_feature_importance_xgboost.png` | Importance des features pour XGBoost (lat/lon en rouge)              |
+| `plots/11_feature_importance_xgboost.png` | Importance des 9 features techniques pour XGBoost                   |
 
 ### Ce qu'on apprend
 
@@ -193,9 +193,12 @@ test, et analyser en détail leurs forces et faiblesses via des visualisations.
 
 | Modèle              | Accuracy | F1 weighted | F1 macro | Interprétation                                          |
 |---------------------|----------|-------------|----------|---------------------------------------------------------|
-| Logistic Regression | 0.602    | 0.591       | 0.512    | Baseline — frontières non linéaires mal capturées       |
-| K-Nearest Neighbors | 0.737    | 0.737       | 0.664    | +14 points — capture la proximité géographique          |
-| **XGBoost**         | **0.996**| **0.996**   | **0.992**| Score quasi-parfait — artefact GPS (voir ci-dessous)    |
+| Logistic Regression | 0.536    | 0.556       | 0.497    | Baseline — frontières non linéaires mal capturées       |
+| K-Nearest Neighbors | 0.620    | 0.615       | 0.584    | +8 points — capture des voisinages dans l'espace des features |
+| **XGBoost**         | **0.650**| **~0.646**  | **~0.52**| Meilleur modèle — seuil 0.63 sur P(Sous-équipé) activé  |
+
+> Les scores XGBoost sont mesurés avec le seuil de décision optimisé (0.63).
+> Sans seuil, l'accuracy est de 0.605 — voir `scripts/threshold_analysis.py`.
 
 #### Lecture des matrices de confusion
 
@@ -210,15 +213,16 @@ Réel 1 (NÉ)  →     32        368         128       ← 368 bien classées, 1
 Réel 2 (BÉ)  →      6        143         362       ← 362 bien classées, 149 erreurs
 ```
 
-Pour XGBoost : la diagonale est quasi-parfaite (>98 % par classe).
+Pour XGBoost : la classe 0 (Sous-équipé, 8.7 % du dataset) reste la plus difficile
+à prédire — c'est la principale source d'erreurs sur la diagonale.
 
-#### Pourquoi `latitude` et `longitude` dominent l'importance XGBoost
+#### Importance des features XGBoost
 
-Le graphique d'importance des features (section 6) montre que `latitude` et `longitude`
-concentrent l'essentiel du pouvoir prédictif de XGBoost. Ce n'est pas une surprise :
-les labels ont été créés par K-Means sur la densité géographique des communes,
-et XGBoost apprend à reconstruire cette partition depuis les coordonnées GPS.
-C'est l'**artefact** documenté dans `results/LISEZ-MOI.md` et `models/LISEZ-MOI.md`.
+Le graphique d'importance (section 6) montre quelles features techniques contribuent
+le plus aux prédictions : `puissance_nominale`, `nbre_pdc` et les types de prises
+CCS/CHAdeMO ressortent généralement en tête.
+La prédiction se base exclusivement sur les caractéristiques des bornes,
+sans aucune information géographique.
 
 ---
 
