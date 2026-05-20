@@ -4,6 +4,7 @@ matplotlib
 numpy
 pandas
 plotly
+pytest
 python-dotenv
 scikit-learn
 seaborn
