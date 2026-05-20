@@ -30,10 +30,10 @@ recall_macro     | float  | Rappel moyen sur les 3 classes (0.0 à 1.0)
 
 Exemple de contenu du CSV :
 ─────────────────────────────────────────────────────────────────────────────
-model_key,model_name,accuracy,f1_weighted,f1_macro,precision_macro,recall_macro
-logistic_regression,Logistic Regression,0.5360,0.5559,0.4969,0.5094,0.5708
-knn,K-Nearest Neighbors,0.6204,0.6151,0.5843,0.6044,0.5796
-xgboost,XGBoost,0.6046,0.6106,0.5641,0.5642,0.6175
+model_key,model_name,model_path,accuracy,f1_weighted,f1_macro,precision_macro,recall_macro
+logistic_regression,Logistic Regression,/…/models/logistic_regression.joblib,0.5360,0.5559,0.4969,0.5094,0.5708
+knn,K-Nearest Neighbors,/…/models/knn.joblib,0.6204,0.6151,0.5843,0.6044,0.5796
+xgboost,XGBoost,/…/models/xgboost.joblib,0.6046,0.6106,0.5641,0.5642,0.6175
 
 ⚠️  Ce fichier est fourni par le template du cours et ne doit pas être modifié.
     Il est importé et utilisé automatiquement par scripts/main.py et src/app.py.

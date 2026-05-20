@@ -87,6 +87,8 @@ Deux mécanismes sont mis en place pour améliorer sa détection :
 
 ### Comment lire les métriques ?
 
+> Exemple avec **K-Nearest Neighbors** (meilleure accuracy : 0.620).
+
 ```
 accuracy = 0.620  →  Sur 1 138 bornes testées, 62.0 % sont correctement classifiées.
 
@@ -95,10 +97,10 @@ f1_weighted = 0.615  →  Bon équilibre précision/rappel sur toutes les classe
 f1_macro = 0.584  →  Score équitable sur les 3 classes.
                       (Si f1_macro << f1_weighted : le modèle ignore les petites classes)
 
-precision_macro = 0.604  →  Quand le modèle dit "sous-équipée",
+precision_macro = 0.604  →  Quand le KNN dit "sous-équipée",
                              il a raison en moyenne 60 % du temps.
 
-recall_macro = 0.580     →  Le modèle détecte en moyenne 58 % des communes
+recall_macro = 0.580     →  Le KNN détecte en moyenne 58 % des communes
                              de chaque classe.
                              (Un faible rappel sur la classe 0 = sous-équipements ratés)
 ```

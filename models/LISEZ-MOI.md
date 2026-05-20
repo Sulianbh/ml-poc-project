@@ -300,13 +300,14 @@ la classe minoritaire.
 
 ## Comparaison des 3 modèles
 
-| Modèle                | Accuracy | F1 macro | Taille   | Re-pondération | Seuil optimisé |
-|-----------------------|----------|----------|----------|----------------|----------------|
-| Logistic Regression   | 0.536    | 0.497    | ~2 Ko    | class_weight   | Non            |
-| K-Nearest Neighbors   | 0.620    | 0.584    | ~650 Ko  | Non supporté   | Non            |
-| **XGBoost**           | **0.650**| **~0.52**| ~1.2 Mo  | sample_weight  | **Oui (0.63)** |
+| Modèle                | Accuracy (baseline) | Accuracy (seuil) | F1 macro | Taille   | Re-pondération | Seuil optimisé |
+|-----------------------|---------------------|------------------|----------|----------|----------------|----------------|
+| Logistic Regression   | 0.536               | —                | 0.497    | ~2 Ko    | class_weight   | Non            |
+| K-Nearest Neighbors   | 0.620               | —                | 0.584    | ~650 Ko  | Non supporté   | Non            |
+| **XGBoost**           | **0.605**           | **0.650**        | **0.564**| ~1.2 Mo  | sample_weight  | **Oui (0.63)** |
 
-> Les scores XGBoost sont mesurés avec le seuil de décision activé.
+> Baseline = `predict()` standard (argmax des probabilités).
+> Seuil = P(Sous-équipé) ≥ 0.63 activé (voir `scripts/threshold_analysis.py`).
 > Ces valeurs reflètent la vraie capacité de généralisation des modèles
 > sur les 9 features techniques des bornes.
 
