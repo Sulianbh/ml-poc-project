@@ -390,7 +390,6 @@
         <div class="gap-item">224 476 PDC dans le registre IRVE national</div>
         <div class="gap-item">7 469 bornes Allego · données brutes</div>
         <div class="gap-item">lat/lon · puissance · type de prise · opérateur</div>
-        <div class="gap-item">Fichiers CSV non structurés · mise à jour mensuelle</div>
         <div class="gap-item">Aucune classification territoriale disponible</div>
       </div>
       <div class="gap-divider">→</div>
@@ -399,7 +398,6 @@
         <div class="gap-item"><strong>Quelles communes prioriser pour le prochain déploiement ?</strong></div>
         <div class="gap-item">Une classification objective : Sous-équipé / Normal / Bien équipé</div>
         <div class="gap-item">Un score de confiance par commune, reproductible</div>
-        <div class="gap-item">Un outil actualisable à chaque mise à jour IRVE</div>
         <div class="gap-item">Des décisions data-driven en secondes, pas en semaines</div>
       </div>
     </div>
@@ -425,7 +423,7 @@
       <div class="solution-bullets">
         <div class="sol-item">
           <span class="num">1</span>
-          <p>On filtre les <strong>224 476 PDC du registre IRVE</strong> national pour isoler les 7 469 bornes Allego sur 294 communes — puis nettoyage → 5 687 points exploitables</p>
+          <p>On filtre les <strong>224 476 PDC du registre IRVE</strong> pour isoler les 7 469 bornes Allego sur 294 communes (5 687 après nettoyage)</p>
         </div>
         <div class="sol-item">
           <span class="num">2</span>
@@ -433,11 +431,11 @@
         </div>
         <div class="sol-item">
           <span class="num">3</span>
-          <p><strong>K-Means (k=3)</strong> labellise automatiquement chaque commune — 73 sous-équipées · 154 normales · 67 bien équipées — sans aucune annotation manuelle</p>
+          <p><strong>K-Means (k=3)</strong> labellise chaque commune — 73 sous-équipées · 154 normales · 67 bien équipées</p>
         </div>
         <div class="sol-item">
           <span class="num">4</span>
-          <p>Trois classifieurs comparés : Régression Logistique, KNN, <strong>XGBoost</strong>. Le seuil de décision calibré à <strong>0,63</strong> maximise la précision sur les zones critiques</p>
+          <p>Trois classifieurs comparés : Logistic Regression, KNN, <strong>XGBoost</strong>. Seuil calibré à <strong>0,63</strong> pour maximiser la précision sur les communes sous-équipées</p>
         </div>
       </div>
 
@@ -484,7 +482,6 @@
         <p>
           L'analyse manuelle de 294 communes prend des semaines. Le modèle la réalise en quelques secondes,
           avec une précision <strong>reproductible et documentée</strong>.
-          Les équipes terrain se concentrent sur l'exécution, pas sur l'analyse.
         </p>
         <div class="value-metric">
           294 communes → classification complète en &lt; 5 secondes
@@ -496,8 +493,7 @@
         <h3>Expansion Stratégique</h3>
         <p>
           <strong>73 communes sous-équipées identifiées</strong> = 73 opportunités de déploiement prioritaires.
-          Chaque borne installée au bon endroit maximise l'usage et le retour sur investissement
-          dans un marché en forte croissance.
+          Chaque borne installée au bon endroit maximise l'usage et le retour sur investissement.
         </p>
         <div class="value-metric">
           73 zones critiques · 8,7 % du réseau · priorisation immédiate
@@ -509,8 +505,7 @@
         <h3>Décisions Data-Driven</h3>
         <p>
           Le pipeline est réplicable sur <strong>n'importe quel opérateur</strong> du registre IRVE.
-          À chaque mise à jour nationale, le modèle est ré-entraîné et la carte des priorités
-          recalculée automatiquement — sans intervention humaine.
+          À chaque mise à jour nationale, le modèle est ré-entraîné et la carte des priorités recalculée.
         </p>
         <div class="value-metric">
           224 476 PDC IRVE · scalable à toute la France · mise à jour continue
